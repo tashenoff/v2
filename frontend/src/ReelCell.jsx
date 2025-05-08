@@ -1,21 +1,23 @@
 import React from 'react';
+import { CELL_SIZE } from './constants';
 
-const SYMBOL_HEIGHT = 50;
-
-function ReelCell({ id, getSymbolEmoji }) {
+function ReelCell({ id, getSymbolEmoji, matched }) {
   return (
-    <div style={{
-      fontSize: 40,
-      width: 50,
-      height: SYMBOL_HEIGHT,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      margin: 2,
-      background: '#222',
-      borderRadius: 8
-    }}>
-      {getSymbolEmoji(id)}
+    <div
+      className={matched ? 'matched' : ''}
+      style={{
+        fontSize: CELL_SIZE * 0.75,
+        width: CELL_SIZE,
+        height: CELL_SIZE,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        margin: 2,
+        background: '#222',
+        borderRadius: 12
+      }}
+    >
+      {getSymbolEmoji(id, CELL_SIZE)}
     </div>
   );
 }

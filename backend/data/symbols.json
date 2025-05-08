@@ -2,22 +2,22 @@
   {
     "id": "cherry",
     "emoji": "🍒",
-    "image": null
+    "image": "cherry.png"
   },
   {
     "id": "lemon",
     "emoji": "🍋",
-    "image": null
+    "image": "lemon.png"
   },
   {
     "id": "seven",
     "emoji": "7️⃣",
-    "image": null
+    "image": "seven.png"
   },
   {
     "id": "bar",
     "emoji": "🟫",
-    "image": null
+    "image": "freespin.png"
   },
   {
     "id": "diamond",

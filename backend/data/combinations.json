@@ -1,5 +1,13 @@
 [
   {
+    "id": "jackpot_seven_center",
+    "name": "5 x Семёрка по центру (Джекпот)",
+    "pattern": ["seven", "seven", "seven", "seven", "seven"],
+    "line": "center",
+    "payout": 0,
+    "jackpot": true
+  },
+  {
     "id": "five_cherry_center",
     "name": "5 x Вишня по центру",
     "pattern": ["cherry", "cherry", "cherry", "cherry", "cherry"],

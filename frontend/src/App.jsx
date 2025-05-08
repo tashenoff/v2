@@ -4,6 +4,7 @@ import SlotMachine from './SlotMachine';
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
+import Jackpot from './Jackpot';
 
 const REELS_COUNT = 5;
 const SYMBOLS_ON_REEL = 20;
@@ -58,6 +59,36 @@ function SpinButton({ onClick, disabled, loading, usedFreespin }) {
   );
 }
 
+// Компонент выбора ставки
+function BetSelector({ bet, setBet, disabled }) {
+  const options = [10000, 50000, 100000];
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <span style={{ marginRight: 8 }}>Ставка:</span>
+      {options.map(opt => (
+        <button
+          key={opt}
+          onClick={() => setBet(opt)}
+          disabled={disabled || bet === opt}
+          style={{
+            fontSize: 16,
+            padding: '4px 16px',
+            marginRight: 8,
+            borderRadius: 4,
+            border: bet === opt ? '2px solid #1e90ff' : '1px solid #aaa',
+            background: bet === opt ? '#1e90ff' : '#fff',
+            color: bet === opt ? '#fff' : '#222',
+            fontWeight: bet === opt ? 'bold' : 'normal',
+            cursor: bet === opt ? 'default' : 'pointer'
+          }}
+        >
+          {opt.toLocaleString('ru-RU')}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function App() {
   const [balance, setBalance] = useState(0);
   const [freespins, setFreespins] = useState(0);
@@ -75,10 +106,15 @@ function App() {
   const [stopSymbols, setStopSymbols] = useState(null);
   const [initialReels, setInitialReels] = useState([]);
   const [reelsForSpin, setReelsForSpin] = useState([]);
+  const [bet, setBetState] = useState(100);
+  const [autoSpin, setAutoSpin] = useState(false);
+  const [matchedPositions, setMatchedPositions] = useState([[], [], [], [], []]);
+  const [jackpotWin, setJackpotWin] = useState(false);
 
   useEffect(() => {
     fetchState();
     getSymbols().then(setSymbols);
+    fetchBet();
   }, []);
 
   // Генерируем случайные символы для барабанов (до первого спина)
@@ -92,11 +128,36 @@ function App() {
     }
   }, [symbols]);
 
+  useEffect(() => {
+    if (autoSpin && !loading && !noChips && !error) {
+      const timer = setTimeout(() => {
+        handleSpin();
+      }, 1200); // задержка между автоспинами
+      return () => clearTimeout(timer);
+    }
+  }, [autoSpin, loading, noChips, error]);
+
   const fetchState = async () => {
     const data = await getBalance();
     setBalance(data.balance);
     setFreespins(data.freespins);
     setNoChips(data.balance <= 0 && data.freespins === 0);
+  };
+
+  // Получение и установка ставки через backend
+  const fetchBet = async () => {
+    const res = await fetch('http://localhost:5000/api/bet');
+    const data = await res.json();
+    setBetState(data.bet);
+  };
+
+  const updateBet = async (newBet) => {
+    setBetState(newBet); // Сразу обновляем локально
+    await fetch('http://localhost:5000/api/bet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bet: newBet })
+    });
   };
 
   const handleSpin = async () => {
@@ -106,16 +167,14 @@ function App() {
     setUsedFreespin(false);
     setComboName(null);
     setResult([]);
-    // ВАЖНО: Логика анимации барабанов
-    // 1. Сначала получаем результат от бэка (finalReels)
-    // 2. Для каждого барабана запускаем анимацию вращения через setInterval (быстрая смена символов)
-    // 3. После заданного количества циклов анимации каждый барабан ОСТАНАВЛИВАЕТСЯ ровно на нужной тройке символов из ответа бэка
-    // 4. После остановки барабанов символы больше не меняются!
-    // 5. setResult используется только для расчёта выигрыша и comboName, но не для отображения символов
-    // Не менять эту логику — иначе появятся баги с "прыжками" символов!
-    // ---
-    // Сразу получаем результат от бэка
-    const data = await spin();
+    // Получаем результат от бэка
+    const data = await fetch('http://localhost:5000/api/spin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bet })
+    }).then(r => r.json());
+
+    // --- Новый блок: формируем массивы для анимации ---
     let finalReels;
     if (data.result.length === 15) {
       finalReels = [0,1,2,3,4].map(i => data.result.slice(i*3, i*3+3));
@@ -132,44 +191,62 @@ function App() {
         symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : ''
       ]);
     }
-    // Анимация вращения барабанов с остановкой на нужных символах
-    let currentReels = reelsState.length === REELS_COUNT ? [...reelsState] : Array(REELS_COUNT).fill().map(() => ({ symbols: getRandomSymbols(symbols, SYMBOLS_VISIBLE), animating: false }));
-    const SPIN_CYCLES = 18; // сколько раз "прокрутить" каждый барабан
-    for (let i = 0; i < REELS_COUNT; i++) {
-      // Каскадный запуск с задержкой
+
+    // Для каждого барабана формируем массив: N случайных + 3 финальных
+    const ANIMATION_SYMBOLS = 15; // сколько всего символов в анимации (>=3)
+    const reelsForAnimation = finalReels.map(final3 => {
+      const randoms = Array.from({length: ANIMATION_SYMBOLS - 3}, () => symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : '');
+      return [...randoms, ...final3];
+    });
+
+    // Поочерёдный запуск анимации барабанов БЕЗ сброса в пустое состояние
+    const START_DELAY = 200; // задержка между стартом барабанов (мс)
+    reelsForAnimation.forEach((arr, i) => {
       setTimeout(() => {
-        let spins = 0;
-        const interval = setInterval(() => {
-          spins++;
-          if (spins < SPIN_CYCLES) {
-            currentReels = currentReels.map((r, idx) =>
-              idx === i
-                ? { symbols: getRandomSymbols(symbols, ANIMATION_LENGTH), animating: true }
-                : r
-            );
-            setReelsState([...currentReels]);
-          } else {
-            clearInterval(interval);
-            currentReels = currentReels.map((r, idx) =>
-              idx === i
-                ? { symbols: finalReels[i], animating: false }
-                : r
-            );
-            setReelsState([...currentReels]);
-          }
-        }, 60);
-      }, i * SPIN_START_DELAY);
-    }
-    // После полной остановки всех барабанов — обновляем результат и выигрыш
-    setTimeout(async () => {
-      setResult(data.result); // только для расчёта выигрыша и comboName
+        setReelsState(prev => prev.map((r, idx) =>
+          idx === i ? { symbols: arr, animating: true } : r
+        ));
+      }, i * START_DELAY);
+    });
+
+    // Поочерёдная остановка барабанов с задержкой
+    const STOP_DELAY = 250; // задержка между остановкой барабанов (мс)
+    finalReels.forEach((finalArr, i) => {
+      setTimeout(() => {
+        setReelsState(prev => prev.map((r, idx) =>
+          idx === i ? { symbols: finalArr, animating: false } : r
+        ));
+      }, 1000 + i * STOP_DELAY + i * START_DELAY); // учтём задержку старта
+    });
+
+    // После остановки последнего барабана — обновляем результат и выигрыш
+    setTimeout(() => {
+      setResult(data.result);
       setPayout(data.payout);
       setComboName(data.combo_name);
-      await fetchState();
+      // Определяем совпавшие позиции (как раньше)
+      let matched = [[], [], [], [], []];
+      if (data.result && data.combo_id) {
+        if (data.result.length === 15 && data.combo_id) {
+          if (data.combo_id.includes('center')) {
+            for (let i = 0; i < 5; i++) matched[i] = [1];
+          }
+        }
+        if (data.result.length === 5 && data.combo_id) {
+          for (let i = 0; i < 5; i++) matched[i] = [1];
+        }
+      }
+      setMatchedPositions(matched);
+      fetchState();
       if (data.freespins < freespins) setUsedFreespin(true);
       if (data.error) setError(data.error);
       setLoading(false);
-    }, REELS_COUNT * SPIN_START_DELAY + SPIN_CYCLES * 60 + 400);
+      if (data.error || data.balance <= 0) setAutoSpin(false);
+      if (data.jackpot_win) {
+        setJackpotWin(true);
+        setTimeout(() => setJackpotWin(false), 2000);
+      }
+    }, 1000 + REELS_COUNT * STOP_DELAY + REELS_COUNT * START_DELAY + 200); // после остановки последнего барабана
   };
 
   const handleRestart = async () => {
@@ -197,9 +274,13 @@ function App() {
     }
   };
 
-  const getSymbolEmoji = (id) => {
+  const getSymbolEmoji = (id, size = 36) => {
     const sym = symbols.find(s => s.id === id);
-    return sym ? sym.emoji : id;
+    if (!sym) return id;
+    if (sym.image) {
+      return <img src={"/assets/" + sym.image} alt={id} style={{ width: size, height: size, objectFit: 'contain' }} />;
+    }
+    return <span style={{ fontSize: size * 0.75 }}>{sym.emoji}</span>;
   };
 
   // Формируем reels для отображения/анимации
@@ -262,12 +343,18 @@ function App() {
     }, 700 + 5 * 300 + 200);
   };
 
+  // disableSpin: если баланс меньше ставки и нет фриспинов
+  const disableSpin = loading || noChips || (balance < bet && freespins === 0);
+
   return (
     <div style={{ maxWidth: 500, margin: '40px auto', textAlign: 'center', fontFamily: 'sans-serif' }}>
+      <Jackpot jackpotWin={jackpotWin} />
       <h1>Слот-машина</h1>
       <div style={{ marginBottom: 16 }}>
         <b>Баланс:</b> {balance} | <b>Фриспины:</b> {freespins}
       </div>
+      {/* Выбор ставки */}
+      <BetSelector bet={bet} setBet={updateBet} disabled={loading || noChips} />
       <button
         onClick={handleActivateFreespins}
         style={{ marginBottom: 16, fontSize: 16, padding: '6px 18px', background: '#1e90ff', color: '#fff', border: 'none', borderRadius: 6 }}
@@ -291,11 +378,12 @@ function App() {
       <SlotMachine
         reels={reelsState.map(r => r.symbols || [])}
         getSymbolEmoji={getSymbolEmoji}
+        matchedPositions={matchedPositions}
       />
       {/* Кнопка Spin */}
       <SpinButton
         onClick={handleSpin}
-        disabled={loading || noChips}
+        disabled={disableSpin}
         loading={loading}
         usedFreespin={usedFreespin}
       />
@@ -307,6 +395,14 @@ function App() {
           Начать заново
         </button>
       )}
+      {/* Кнопка автоспина */}
+      <button
+        onClick={() => setAutoSpin(a => !a)}
+        disabled={loading || noChips}
+        style={{ marginBottom: 12, fontSize: 16, padding: '6px 18px', background: autoSpin ? '#1e90ff' : '#444', color: '#fff', border: 'none', borderRadius: 6 }}
+      >
+        {autoSpin ? 'Стоп автоспин' : 'Автоспин'}
+      </button>
     </div>
   );
 }

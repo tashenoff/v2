@@ -1,43 +1,50 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReelCell from './ReelCell';
+import { CELL_SIZE } from './constants';
 
-const SYMBOL_HEIGHT = 50;
-
-function Reel({ symbols, getSymbolEmoji }) {
+function Reel({ symbols, getSymbolEmoji, matched = [] }) {
   const reelRef = useRef(null);
   const [offset, setOffset] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [displaySymbols, setDisplaySymbols] = useState(symbols);
+  const [animSymbols, setAnimSymbols] = useState(symbols);
 
   useEffect(() => {
+    // Если symbols.length > 3 — это запуск анимации
     if (symbols.length > 3) {
-      // Анимация: прокрутить к последним 3 символам
+      // Формируем длинный массив: случайные + финальные 3
+      setAnimSymbols(symbols);
       setIsAnimating(true);
-      setOffset(-((symbols.length - 3) * SYMBOL_HEIGHT));
-      setDisplaySymbols(symbols);
+      setOffset(0);
+      // Запускаем анимацию через небольшой таймаут (чтобы transition сработал)
+      setTimeout(() => {
+        setOffset(-((symbols.length - 3) * CELL_SIZE));
+      }, 30);
     } else {
       // Нет анимации, просто показываем
       setIsAnimating(false);
       setOffset(0);
+      setAnimSymbols(symbols);
       setDisplaySymbols(symbols);
     }
   }, [symbols]);
 
   const handleTransitionEnd = () => {
-    if (isAnimating && displaySymbols.length > 3) {
+    if (isAnimating && animSymbols.length > 3) {
       setIsAnimating(false);
       // Оставляем только последние 3 символа
-      setDisplaySymbols(displaySymbols.slice(-3));
+      setDisplaySymbols(animSymbols.slice(-3));
+      setAnimSymbols(animSymbols.slice(-3));
       setOffset(0);
     }
   };
 
   return (
     <div style={{
-      width: 60,
-      height: SYMBOL_HEIGHT * 3,
+      width: CELL_SIZE + 10,
+      height: CELL_SIZE * 3,
       overflow: 'hidden',
-      borderRadius: 8,
+      borderRadius: 12,
       background: '#222',
       boxShadow: '0 2px 6px #0002',
       display: 'flex',
@@ -55,8 +62,8 @@ function Reel({ symbols, getSymbolEmoji }) {
         }}
         onTransitionEnd={handleTransitionEnd}
       >
-        {displaySymbols.map((id, idx) => (
-          <ReelCell key={idx} id={id} getSymbolEmoji={getSymbolEmoji} />
+        {(isAnimating ? animSymbols : displaySymbols).map((id, idx) => (
+          <ReelCell key={idx} id={id} getSymbolEmoji={(id) => getSymbolEmoji(id, CELL_SIZE)} matched={matched.includes(idx)} />
         ))}
       </div>
     </div>

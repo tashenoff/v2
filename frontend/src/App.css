@@ -40,3 +40,13 @@
 .read-the-docs {
   color: #888;
 }
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+.matched {
+  animation: pulse 1s 2;
+  z-index: 2;
+}

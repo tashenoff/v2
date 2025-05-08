@@ -1,4 +1,8 @@
 {
   "always_win": false,
-  "win_chance": 0.5
+  "win_chance": 0.5,
+  "initial_balance": 100000,
+  "bets": [10000, 50000, 100000],
+  "bet_multipliers": [1, 5, 10],
+  "initial_jackpot": 5000
 } 
