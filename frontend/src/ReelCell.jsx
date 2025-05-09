@@ -1,23 +1,27 @@
 import React from 'react';
-import { CELL_SIZE } from './constants';
 
-function ReelCell({ id, getSymbolEmoji, matched }) {
+function ReelCell({ id, getSymbolEmoji, matched, cellSize, imgSize, emojiSize }) {
   return (
     <div
-      className={matched ? 'matched' : ''}
+      className={`slot-cell${matched ? ' matched' : ''}`}
       style={{
-        fontSize: CELL_SIZE * 0.75,
-        width: CELL_SIZE,
-        height: CELL_SIZE,
+        width: cellSize,
+        height: cellSize,
+        margin: Math.max(2, cellSize * 0.02),
+        padding: Math.max(2, cellSize * 0.02),
+        borderRadius: Math.max(8, cellSize * 0.08),
+        boxSizing: 'border-box',
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+        cursor: 'default',
+        background: 'rgba(0, 0, 0, 0.2)',
+        backdropFilter: 'blur(5px)',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
-        margin: 2,
-        background: '#222',
-        borderRadius: 12
+        justifyContent: 'center'
       }}
     >
-      {getSymbolEmoji(id, CELL_SIZE)}
+      {getSymbolEmoji(id, imgSize, emojiSize)}
     </div>
   );
 }

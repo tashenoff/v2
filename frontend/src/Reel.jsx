@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReelCell from './ReelCell';
-import { CELL_SIZE } from './constants';
 
-function Reel({ symbols, getSymbolEmoji, matched = [] }) {
+function Reel({ symbols, getSymbolEmoji, matched = [], cellSize, imgSize, emojiSize }) {
   const reelRef = useRef(null);
   const [offset, setOffset] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -18,7 +17,7 @@ function Reel({ symbols, getSymbolEmoji, matched = [] }) {
       setOffset(0);
       // Запускаем анимацию через небольшой таймаут (чтобы transition сработал)
       setTimeout(() => {
-        setOffset(-((symbols.length - 3) * CELL_SIZE));
+        setOffset(-((symbols.length - 3) * cellSize));
       }, 30);
     } else {
       // Нет анимации, просто показываем
@@ -27,7 +26,7 @@ function Reel({ symbols, getSymbolEmoji, matched = [] }) {
       setAnimSymbols(symbols);
       setDisplaySymbols(symbols);
     }
-  }, [symbols]);
+  }, [symbols, cellSize]);
 
   const handleTransitionEnd = () => {
     if (isAnimating && animSymbols.length > 3) {
@@ -41,8 +40,8 @@ function Reel({ symbols, getSymbolEmoji, matched = [] }) {
 
   return (
     <div style={{
-      width: CELL_SIZE + 10,
-      height: CELL_SIZE * 3,
+      width: cellSize + 10,
+      height: cellSize * 3,
       overflow: 'hidden',
       borderRadius: 12,
       background: '#222',
@@ -63,7 +62,7 @@ function Reel({ symbols, getSymbolEmoji, matched = [] }) {
         onTransitionEnd={handleTransitionEnd}
       >
         {(isAnimating ? animSymbols : displaySymbols).map((id, idx) => (
-          <ReelCell key={idx} id={id} getSymbolEmoji={(id) => getSymbolEmoji(id, CELL_SIZE)} matched={matched.includes(idx)} />
+          <ReelCell key={idx} id={id} getSymbolEmoji={id => getSymbolEmoji(id, imgSize, emojiSize)} matched={matched.includes(idx)} cellSize={cellSize} imgSize={imgSize} emojiSize={emojiSize} />
         ))}
       </div>
     </div>

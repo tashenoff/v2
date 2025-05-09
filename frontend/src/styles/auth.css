@@ -1,0 +1,111 @@
+.auth-container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: linear-gradient(135deg, #1a1a1a 0%, #2a2a2a 100%);
+    padding: 20px;
+}
+
+.auth-form {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 10px;
+    padding: 30px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.auth-form h2 {
+    color: #ffffff;
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.auth-form input {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 20px;
+    border: none;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.07);
+    color: #ffffff;
+    font-size: 16px;
+}
+
+.auth-form input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.auth-form button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 5px;
+    background: #4CAF50;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.auth-form button:hover {
+    background: #45a049;
+}
+
+.auth-switch {
+    margin-top: 20px;
+    text-align: center;
+    color: #ffffff;
+}
+
+.auth-switch button {
+    background: none;
+    border: none;
+    color: #4CAF50;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.auth-error {
+    background: rgba(255, 0, 0, 0.1);
+    color: #ff6b6b;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 10px 20px;
+    background: rgba(0, 0, 0, 0.2);
+    color: white;
+}
+
+.user-info span {
+    margin-right: 20px;
+}
+
+.logout-button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    background: #ff4444;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.logout-button:hover {
+    background: #cc0000;
+} 

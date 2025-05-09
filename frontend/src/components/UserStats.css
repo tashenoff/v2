@@ -1,0 +1,39 @@
+.user-stats {
+  font-family: 'Arial', sans-serif;
+}
+
+.stat-item {
+  padding: 10px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: background 0.3s ease;
+}
+
+.stat-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.stat-label {
+  font-size: 0.9em;
+  color: #aaa;
+  margin-bottom: 5px;
+}
+
+.stat-value {
+  font-size: 1.2em;
+  font-weight: bold;
+}
+
+@media (max-width: 600px) {
+  .user-stats {
+    padding: 10px;
+  }
+  
+  .stat-item {
+    padding: 8px;
+  }
+  
+  .stat-value {
+    font-size: 1.1em;
+  }
+} 

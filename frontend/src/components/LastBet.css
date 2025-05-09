@@ -1,0 +1,38 @@
+.last-bet {
+  font-family: 'Arial', sans-serif;
+}
+
+.bet-item {
+  padding: 10px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: background 0.3s ease;
+}
+
+.bet-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.bet-label {
+  font-size: 0.9em;
+  color: #aaa;
+  margin-bottom: 5px;
+}
+
+.bet-value {
+  font-weight: bold;
+}
+
+@media (max-width: 600px) {
+  .last-bet {
+    padding: 10px;
+  }
+  
+  .bet-item {
+    padding: 8px;
+  }
+  
+  .bet-value {
+    font-size: 0.95em;
+  }
+} 

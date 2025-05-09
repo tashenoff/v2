@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getJackpot } from './services/apiService';
 
 function Jackpot({ jackpotWin }) {
   const [jackpot, setJackpot] = useState(0);
@@ -6,10 +7,10 @@ function Jackpot({ jackpotWin }) {
 
   const fetchJackpot = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/jackpot');
-      const data = await res.json();
-      setJackpot(data.jackpot);
+      const amount = await getJackpot();
+      setJackpot(amount);
     } catch (e) {
+      console.error('Error fetching jackpot:', e);
       setJackpot(0);
     }
   };
@@ -40,7 +41,11 @@ function Jackpot({ jackpotWin }) {
       letterSpacing: 2,
       transition: 'all 0.4s'
     }}>
-      Джекпот: {jackpot}
+      Джекпот: {new Intl.NumberFormat('ru-RU', { 
+        style: 'decimal',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(jackpot)} ₽
     </div>
   );
 }
