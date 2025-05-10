@@ -1,0 +1,50 @@
+.reel-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.reel-strip {
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform-style: preserve-3d;
+}
+
+.reel-strip.animating {
+  animation: blur 0.02s linear infinite;
+}
+
+.reel-blur-top,
+.reel-blur-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 30px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.reel-blur-top {
+  top: 0;
+  background: linear-gradient(to bottom, rgba(34, 34, 34, 1) 0%, rgba(34, 34, 34, 0) 100%);
+}
+
+.reel-blur-bottom {
+  bottom: 0;
+  background: linear-gradient(to top, rgba(34, 34, 34, 1) 0%, rgba(34, 34, 34, 0) 100%);
+}
+
+@keyframes blur {
+  0% {
+    filter: blur(0px);
+  }
+  50% {
+    filter: blur(1px);
+  }
+  100% {
+    filter: blur(0px);
+  }
+} 

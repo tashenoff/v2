@@ -224,95 +224,114 @@ function App() {
   };
 
   const handleSpin = async () => {
-    playSpinClick(); // короткий звук нажатия
-    playSpinLoop();  // зацикленный звук вращения
-    setLoading(true);
-    setError('');
-    setPayout(0);
-    setUsedFreespin(false);
-    setComboName(null);
-    setResult([]);
-    // Получаем результат от бэка
-    const data = await spin(bet);
+    try {
+      // 1. Блокируем кнопку и сбрасываем предыдущие результаты
+      setLoading(true);
+      setError('');
+      setPayout(0);
+      setUsedFreespin(false);
+      setComboName(null);
+      setResult([]);
+      setMatchedPositions([[], [], [], [], []]);
+      
+      // 2. Получаем результат от сервера
+      const data = await spin(bet);
+      
+      // 3. После получения результата запускаем звуки и анимацию
+      playSpinClick();
+      playSpinLoop();
+      
+      // 4. Формируем финальные барабаны из полученного результата
+      let finalReels;
+      if (data.result.length === 15) {
+        finalReels = [0,1,2,3,4].map(i => data.result.slice(i*3, i*3+3));
+      } else if (data.result.length === 5) {
+        finalReels = [0,1,2,3,4].map(i => [
+          symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : '',
+          data.result[i],
+          symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : ''
+        ]);
+      }
 
-    // --- Новый блок: формируем массивы для анимации ---
-    let finalReels;
-    if (data.result.length === 15) {
-      finalReels = [0,1,2,3,4].map(i => data.result.slice(i*3, i*3+3));
-    } else if (data.result.length === 5) {
-      finalReels = [0,1,2,3,4].map(i => [
-        symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : '',
-        data.result[i],
-        symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : ''
-      ]);
-    } else {
-      finalReels = [0,1,2,3,4].map(() => [
-        symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : '',
-        symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : '',
-        symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : ''
-      ]);
-    }
+      // 5. Для каждого барабана формируем массив для анимации
+      const ANIMATION_SYMBOLS = 15;
+      const reelsForAnimation = finalReels.map(final3 => {
+        const randoms = Array.from(
+          {length: ANIMATION_SYMBOLS - 3}, 
+          () => symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : ''
+        );
+        return [...randoms, ...final3];
+      });
 
-    // Для каждого барабана формируем массив: N случайных + 3 финальных
-    const ANIMATION_SYMBOLS = 15; // сколько всего символов в анимации (>=3)
-    const reelsForAnimation = finalReels.map(final3 => {
-      const randoms = Array.from({length: ANIMATION_SYMBOLS - 3}, () => symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : '');
-      return [...randoms, ...final3];
-    });
+      // 6. Запускаем анимацию для каждого барабана с задержкой
+      const START_DELAY = 200;
+      reelsForAnimation.forEach((arr, i) => {
+        setTimeout(() => {
+          setReelsState(prev => prev.map((r, idx) =>
+            idx === i ? { symbols: arr, animating: true } : r
+          ));
+        }, i * START_DELAY);
+      });
 
-    // Поочерёдный запуск анимации барабанов БЕЗ сброса в пустое состояние
-    const START_DELAY = 200; // задержка между стартом барабанов (мс)
-    reelsForAnimation.forEach((arr, i) => {
+      // 7. Останавливаем барабаны с задержкой
+      const STOP_DELAY = 250;
+      finalReels.forEach((finalArr, i) => {
+        setTimeout(() => {
+          setReelsState(prev => prev.map((r, idx) =>
+            idx === i ? { symbols: finalArr, animating: false } : r
+          ));
+        }, 1000 + i * STOP_DELAY + i * START_DELAY);
+      });
+
+      // 8. После остановки всех барабанов обновляем состояние игры
+      const TOTAL_ANIMATION_TIME = 1000 + REELS_COUNT * STOP_DELAY + REELS_COUNT * START_DELAY + 200;
       setTimeout(() => {
-        setReelsState(prev => prev.map((r, idx) =>
-          idx === i ? { symbols: arr, animating: true } : r
-        ));
-      }, i * START_DELAY);
-    });
-
-    // Поочерёдная остановка барабанов с задержкой
-    const STOP_DELAY = 250; // задержка между остановкой барабанов (мс)
-    finalReels.forEach((finalArr, i) => {
-      setTimeout(() => {
-        setReelsState(prev => prev.map((r, idx) =>
-          idx === i ? { symbols: finalArr, animating: false } : r
-        ));
-      }, 1000 + i * STOP_DELAY + i * START_DELAY); // учтём задержку старта
-    });
-
-    // После остановки последнего барабана — обновляем результат и выигрыш
-    setTimeout(() => {
-      setResult(data.result);
-      setPayout(data.payout);
-      setComboName(data.combo_name);
-      // Определяем совпавшие позиции (как раньше)
-      let matched = [[], [], [], [], []];
-      if (data.result && data.combo_id) {
-        if (data.result.length === 15 && data.combo_id) {
-          if (data.combo_id.includes('center')) {
+        setResult(data.result);
+        setPayout(data.payout);
+        setComboName(data.combo_name);
+        
+        // Определяем совпавшие позиции
+        let matched = [[], [], [], [], []];
+        if (data.result && data.combo_id) {
+          if (data.result.length === 15 && data.combo_id) {
+            if (data.combo_id.includes('center')) {
+              for (let i = 0; i < 5; i++) matched[i] = [1];
+            }
+          }
+          if (data.result.length === 5 && data.combo_id) {
             for (let i = 0; i < 5; i++) matched[i] = [1];
           }
         }
-        if (data.result.length === 5 && data.combo_id) {
-          for (let i = 0; i < 5; i++) matched[i] = [1];
+        setMatchedPositions(matched);
+        
+        // Обновляем состояние игры
+        fetchState();
+        if (data.freespins < freespins) setUsedFreespin(true);
+        if (data.error) setError(data.error);
+        setLoading(false);
+        if (data.error || data.balance <= 0) setAutoSpin(false);
+        
+        // Обрабатываем джекпот
+        if (data.jackpot_win) {
+          setJackpotWin(true);
+          setTimeout(() => setJackpotWin(false), 2000);
         }
-      }
-      setMatchedPositions(matched);
-      fetchState();
-      if (data.freespins < freespins) setUsedFreespin(true);
-      if (data.error) setError(data.error);
+        
+        stopSpinLoop();
+        
+        // Показываем модальное окно при выигрыше
+        if (data.payout > 0 || data.combo_name) {
+          setShowWinModal(true);
+        }
+      }, TOTAL_ANIMATION_TIME);
+
+    } catch (error) {
+      console.error('Ошибка при вращении:', error);
+      setError('Произошла ошибка при вращении');
       setLoading(false);
-      if (data.error || data.balance <= 0) setAutoSpin(false);
-      if (data.jackpot_win) {
-        setJackpotWin(true);
-        setTimeout(() => setJackpotWin(false), 2000);
-      }
       stopSpinLoop();
-      // Показываем модальное окно, если есть выигрыш или комбинация
-      if (data.payout > 0 || data.combo_name) {
-        setShowWinModal(true);
-      }
-    }, 1000 + REELS_COUNT * STOP_DELAY + REELS_COUNT * START_DELAY + 200); // после остановки последнего барабана
+      setAutoSpin(false);
+    }
   };
 
   const getSymbolEmoji = (id, imgSize = CELL_SIZE, emojiSize = CELL_SIZE) => {

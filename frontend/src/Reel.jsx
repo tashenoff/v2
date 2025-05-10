@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ReelCell from './ReelCell';
+import './Reel.css';
 
 function Reel({ symbols, getSymbolEmoji, matched = [], cellSize, imgSize, emojiSize }) {
   const reelRef = useRef(null);
@@ -9,18 +10,18 @@ function Reel({ symbols, getSymbolEmoji, matched = [], cellSize, imgSize, emojiS
   const [animSymbols, setAnimSymbols] = useState(symbols);
 
   useEffect(() => {
-    // Если symbols.length > 3 — это запуск анимации
     if (symbols.length > 3) {
-      // Формируем длинный массив: случайные + финальные 3
-      setAnimSymbols(symbols);
+      // Добавляем дополнительные символы для создания эффекта бесконечной ленты
+      const extraSymbols = [...symbols.slice(-3), ...symbols, ...symbols.slice(0, 3)];
+      setAnimSymbols(extraSymbols);
       setIsAnimating(true);
-      setOffset(0);
-      // Запускаем анимацию через небольшой таймаут (чтобы transition сработал)
-      setTimeout(() => {
-        setOffset(-((symbols.length - 3) * cellSize));
-      }, 30);
+      setOffset(-(3 * cellSize)); // Начинаем с позиции, где видны первые символы
+
+      // Запускаем анимацию
+      requestAnimationFrame(() => {
+        setOffset(-((symbols.length + 3) * cellSize));
+      });
     } else {
-      // Нет анимации, просто показываем
       setIsAnimating(false);
       setOffset(0);
       setAnimSymbols(symbols);
@@ -31,38 +32,43 @@ function Reel({ symbols, getSymbolEmoji, matched = [], cellSize, imgSize, emojiS
   const handleTransitionEnd = () => {
     if (isAnimating && animSymbols.length > 3) {
       setIsAnimating(false);
-      // Оставляем только последние 3 символа
-      setDisplaySymbols(animSymbols.slice(-3));
-      setAnimSymbols(animSymbols.slice(-3));
+      setDisplaySymbols(symbols.slice(-3));
+      setAnimSymbols(symbols.slice(-3));
       setOffset(0);
     }
   };
 
   return (
-    <div style={{
+    <div className="reel-container" style={{
       width: cellSize + 10,
       height: cellSize * 3,
       overflow: 'hidden',
       borderRadius: 12,
       background: '#222',
       boxShadow: '0 2px 6px #0002',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
       position: 'relative'
     }}>
+      <div className="reel-blur-top" />
+      <div className="reel-blur-bottom" />
       <div
         ref={reelRef}
+        className={`reel-strip ${isAnimating ? 'animating' : ''}`}
         style={{
-          display: 'flex',
-          flexDirection: 'column',
           transform: `translateY(${offset}px)`,
-          transition: isAnimating ? 'transform 1s cubic-bezier(.17,.67,.83,.67)' : 'none'
+          transition: isAnimating ? 'transform 2s cubic-bezier(0.1, 0.7, 0.5, 1)' : 'none'
         }}
         onTransitionEnd={handleTransitionEnd}
       >
         {(isAnimating ? animSymbols : displaySymbols).map((id, idx) => (
-          <ReelCell key={idx} id={id} getSymbolEmoji={id => getSymbolEmoji(id, imgSize, emojiSize)} matched={matched.includes(idx)} cellSize={cellSize} imgSize={imgSize} emojiSize={emojiSize} />
+          <ReelCell 
+            key={`${id}-${idx}`}
+            id={id} 
+            getSymbolEmoji={id => getSymbolEmoji(id, imgSize, emojiSize)} 
+            matched={matched.includes(idx)} 
+            cellSize={cellSize} 
+            imgSize={imgSize} 
+            emojiSize={emojiSize}
+          />
         ))}
       </div>
     </div>
