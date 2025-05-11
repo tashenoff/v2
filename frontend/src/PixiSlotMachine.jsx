@@ -8,14 +8,10 @@ const FINAL_ANIMATION_DURATION = 400;
 const SPIN_SPEED = 25;
 const EXTRA_DISTANCE = 2; // В единицах cellSize
 const TEXTURE_BUFFER_SIZE = 20;
-const ACCELERATION_DURATION = 300; // Время разгона барабанов (мс)
-const DECELERATION_DURATION = 400; // Время замедления барабанов (мс)
-const MAX_SPEED_MULTIPLIER = 1.4;  // Максимальная скорость в пике
+const BLUR_INTENSITY = 2; // Интенсивность размытия при вращении (уменьшена с 4 до 2)
 
 // Вспомогательные функции
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
-const easeIn = (t) => t * t;
-const easeInOut = (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
 /**
  * Компонент слот-машины на PIXI.js
@@ -189,22 +185,6 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
         symbol.height = cellSize * 0.9;
         symbol.x = cellSize * 0.05;
         symbol.y = (j - 3) * cellSize + cellSize * 0.05;
-        
-        // Улучшаем качество спрайтов и параметры рендеринга
-        symbol.anchor.set(0.5);
-        symbol.x += cellSize * 0.45; // Корректируем позицию из-за изменения якоря
-        symbol.y += cellSize * 0.45; // Корректируем позицию из-за изменения якоря
-        
-        // Включаем сглаживание для более плавного масштабирования
-        symbol.texture.baseTexture.scaleMode = PIXI.SCALE_MODES.LINEAR;
-        
-        // Добавляем небольшой эффект размытия в движении для создания иллюзии скорости
-        const blurFilter = new PIXI.filters.BlurFilter();
-        blurFilter.blur = 0;
-        blurFilter.quality = 1;
-        symbol.filters = [blurFilter];
-        symbol._blurFilter = blurFilter; // Сохраняем ссылку для управления в анимации
-        
         symbolsContainer.addChild(symbol);
       }
 
@@ -249,6 +229,7 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
     const promises = reels.map((reel, i) => spinSingleReel(reel, i, resultMatrix[i]));
 
     await Promise.all(promises);
+    // Вызываем callback после завершения анимации всех барабанов
     onSpinComplete?.();
   };
 
@@ -263,7 +244,12 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
         // Устанавливаем максимальный FPS для плавности
         ticker.maxFPS = 60;
         let elapsed = 0;
-        let startTime = Date.now();
+        
+        // Создаем и применяем фильтр размытия
+        const blurFilter = new PIXI.BlurFilter();
+        blurFilter.blur = 0;
+        blurFilter.quality = 1;
+        reel.filters = [blurFilter];
         
         // Создание буфера текстур для плавной анимации
         const textureBuffer = createTextureBuffer();
@@ -281,58 +267,26 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
           return texture;
         };
 
-        /**
-         * Расчет множителя скорости с эффектами разгона и замедления
-         */
-        const getSpeedMultiplier = (currentTime) => {
-          // Фаза разгона
-          if (currentTime < ACCELERATION_DURATION) {
-            const accelerationProgress = currentTime / ACCELERATION_DURATION;
-            return 0.5 + (MAX_SPEED_MULTIPLIER - 0.5) * easeIn(accelerationProgress);
-          }
-          
-          // Фаза полной скорости
-          if (currentTime < spinDuration - DECELERATION_DURATION) {
-            return MAX_SPEED_MULTIPLIER;
-          }
-          
-          // Фаза замедления
-          const timeLeftToStop = spinDuration - currentTime;
-          if (timeLeftToStop > 0) {
-            const decelerationProgress = 1 - (timeLeftToStop / DECELERATION_DURATION);
-            return MAX_SPEED_MULTIPLIER - (MAX_SPEED_MULTIPLIER - 0.2) * easeInOut(decelerationProgress);
-          }
-          
-          return 0.05; // Минимальная скорость в конце
-        };
-        
-        /**
-         * Обновление эффекта размытия в зависимости от скорости
-         */
-        const updateBlurEffect = (symbol, speedMultiplier) => {
-          if (symbol._blurFilter) {
-            // Размытие пропорционально скорости
-            const blurAmount = Math.min(12, speedMultiplier * 8);
-            symbol._blurFilter.blur = blurAmount;
-            
-            // Направление размытия - вертикальное (по направлению движения)
-            symbol._blurFilter.blurX = 0;
-            symbol._blurFilter.blurY = blurAmount;
-          }
-        };
-        
         // Вращение барабана
         ticker.add(() => {
           elapsed += ticker.deltaMS;
-          const currentTime = Date.now() - startTime;
-          const speedMultiplier = getSpeedMultiplier(currentTime);
+          
+          // Управляем интенсивностью размытия
+          const progress = elapsed / spinDuration;
+          if (progress < 0.2) {
+            // Нарастание размытия
+            blurFilter.blur = BLUR_INTENSITY * (progress / 0.2);
+          } else if (progress > 0.8) {
+            // Уменьшение размытия
+            blurFilter.blur = BLUR_INTENSITY * (1 - (progress - 0.8) / 0.2);
+          } else {
+            // Максимальное размытие
+            blurFilter.blur = BLUR_INTENSITY;
+          }
           
           reel.children.forEach((symbol) => {
             // Адаптируем скорость к deltaTime для консистентности при разных FPS
-            symbol.y += SPIN_SPEED * speedMultiplier * (ticker.deltaMS / 16.67);
-            
-            // Обновляем эффект размытия
-            updateBlurEffect(symbol, speedMultiplier);
+            symbol.y += SPIN_SPEED * (ticker.deltaMS / 16.67);
 
             if (symbol.y >= cellSize * 4) {
               symbol.y = -cellSize * 2;
@@ -343,14 +297,8 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
           // Если вращение завершено, останавливаем барабан
           if (elapsed >= spinDuration) {
             ticker.destroy();
-            
-            // Сбрасываем размытие перед финальной анимацией
-            reel.children.forEach(symbol => {
-              if (symbol._blurFilter) {
-                symbol._blurFilter.blur = 0;
-              }
-            });
-            
+            // Убираем фильтр размытия перед остановкой
+            reel.filters = null;
             animateReelStop(reel, finalSymbols).then(resolve);
           }
         });
@@ -382,9 +330,6 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
       const startTime = Date.now();
       const extraDistance = cellSize * EXTRA_DISTANCE;
       
-      // Сохраняем текущую скорость для более плавной остановки
-      const initialVelocity = SPIN_SPEED * 0.2;
-      
       // Начальное положение всей колонки (немного ниже)
       sortedSymbols.forEach(symbol => {
         symbol.y += extraDistance;
@@ -393,49 +338,25 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
       const animTicker = new PIXI.Ticker();
       // Устанавливаем максимальный FPS для плавности
       animTicker.maxFPS = 60;
-      
-      // Используем физическую модель с затуханием для более реалистичного движения
-      let velocity = initialVelocity;
-      const friction = 0.94; // Коэффициент трения (затухания)
-      const gravity = 0.2;   // Симуляция гравитации для естественного движения
-      let lastFrameTime = startTime;
-      
       animTicker.add(() => {
         const currentTime = Date.now();
-        const deltaTime = currentTime - lastFrameTime;
-        lastFrameTime = currentTime;
-        const normalizedDelta = deltaTime / 16.67; // Нормализация для 60fps
-        
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / FINAL_ANIMATION_DURATION, 1);
         
-        if (progress < 1) {
-          // Более реалистичная физическая модель с затуханием
-          velocity = velocity * Math.pow(friction, normalizedDelta);
-          velocity -= gravity * normalizedDelta;
-          
-          // Упругий эффект для финального позиционирования
-          const targetOffset = extraDistance * (1 - easeInOut(progress));
-          const currentPosition = sortedSymbols[0].y - ((0 - 3) * cellSize + cellSize * 0.05);
-          const elasticEffect = (targetOffset - currentPosition) * 0.1 * normalizedDelta;
-          
-          const finalDelta = velocity + elasticEffect;
-         
-          // Двигаем все символы в колонке вместе
-          sortedSymbols.forEach((symbol, j) => {
-            symbol.y += finalDelta;
-            
-            // Ограничиваем позицию, чтобы символы не уходили ниже финального положения
-            const finalY = (j - 3) * cellSize + cellSize * 0.05;
-            symbol.y = Math.max(symbol.y, finalY);
-          });
-        } else {
-          // Финальное позиционирование - выставляем точно на нужные позиции
-          sortedSymbols.forEach((symbol, j) => {
-            const finalY = (j - 3) * cellSize + cellSize * 0.05;
-            symbol.y = finalY;
-          });
-        }
+        // Используем более плавную функцию easing
+        const smoothEasing = progress => {
+          // Комбинация cubic и elastic для более реалистичной инерции
+          const elasticFactor = Math.sin(progress * Math.PI * 2) * Math.pow(1 - progress, 2) * 0.1;
+          return easeOut(progress) + elasticFactor;
+        };
+        
+        const currentOffset = extraDistance * (1 - smoothEasing(progress));
+        
+        // Двигаем все символы в колонке вместе
+        sortedSymbols.forEach((symbol, j) => {
+          const finalY = (j - 3) * cellSize + cellSize * 0.05;
+          symbol.y = finalY + currentOffset;
+        });
         
         if (progress >= 1) {
           animTicker.destroy();
@@ -460,8 +381,6 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
       resolution: window.devicePixelRatio || 1,
       autoDensity: true,
       antialias: true,
-      autoStart: true,
-      sharedTicker: true,
       powerPreference: 'high-performance',
       useContextAlpha: false,
       legacy: false
@@ -470,9 +389,6 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
     canvasRef.current.appendChild(app.view);
     appRef.current = app;
 
-    PIXI.settings.ROUND_PIXELS = false;
-    PIXI.settings.PRECISION_FRAGMENT = PIXI.PRECISION.HIGH;
-    
     app.view.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
       console.log('WebGL контекст потерян, восстанавливаем...');

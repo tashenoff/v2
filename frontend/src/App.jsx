@@ -69,6 +69,23 @@ function getRandomSymbols(symbols, count) {
   return Array.from({ length: count }, () => symbols[Math.floor(Math.random() * symbols.length)].id);
 }
 
+// Выносим компонент FreespinsDisplay за пределы App
+const FreespinsDisplay = ({ count }) => (
+  <div className="freespins-display" style={{
+    textAlign: 'center',
+    padding: '10px',
+    color: '#ffd700',
+    fontSize: '18px',
+    fontWeight: 'bold',
+    background: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: '8px',
+    margin: '10px 20px',
+    display: 'block' // Всегда показываем блок
+  }}>
+    🎰 {count > 0 ? `Доступно фриспинов: ${count}` : 'Нет доступных фриспинов'}
+  </div>
+);
+
 function App() {
   console.log('App component initialization started');
 
@@ -232,63 +249,35 @@ function App() {
 
   const handleSpin = async () => {
     try {
-      // 1. Блокируем кнопку и сбрасываем предыдущие результаты
+      console.log('Starting spin with freespins:', freespins);
+
+      // 1. Блокируем кнопку
       setLoading(true);
-      setError('');
-      setPayout(0);
-      setUsedFreespin(false);
-      setComboName(null);
-      setResult([]);
-      setMatchedPositions([[], [], [], [], []]);
-      setShowWinModal(false);
       
       // 2. Получаем результат от сервера
       const data = await spin(bet);
-      console.log('Spin response:', {
-        result: data.result,
-        payout: data.payout,
-        combo_id: data.combo_id,
-        combo_name: data.combo_name,
-        jackpot_win: data.jackpot_win
+      console.log('Server response:', {
+        currentFreespins: freespins,
+        newFreespins: data.freespins,
+        balance: data.balance
       });
-
-      // Добавляем логирование комбинаций
-      console.log('Комбинации на поле:');
-      const matrix = [
-        data.result.slice(0, 3),
-        data.result.slice(3, 6),
-        data.result.slice(6, 9),
-        data.result.slice(9, 12),
-        data.result.slice(12, 15)
-      ];
       
-      console.table(matrix);
-      
-      if (data.combo_name) {
-        console.log('%cВыигрышная комбинация: ' + data.combo_name, 'color: #ffd700; font-weight: bold;');
-        console.log('%cВыигрыш: ' + data.payout + ' ₽', 'color: #00ff00; font-weight: bold;');
-      }
-      
-      if (data.jackpot_win) {
-        console.log('%cДЖЕКПОТ!', 'color: #ff0000; font-size: 20px; font-weight: bold;');
-      }
-      
-      // 3. После получения результата запускаем звуки
+      // Запускаем анимацию и звуки
       playSpinClick();
       playSpinLoop();
       
-      // 4. Устанавливаем результат для отображения в PixiSlotMachine
+      // Устанавливаем результат для отображения
       setResult(data.result);
       
-      // Сохраняем данные для использования после завершения анимации
+      // Сохраняем все необходимые данные
       window._spinData = {
         balance: data.balance,
-        freespins: data.freespins,
         payout: data.payout,
-        usedFreespin: data.usedFreespin,
-        comboName: data.comboName,
+        comboName: data.combo_name,
         matchedPositions: data.matchedPositions,
-        jackpot_win: data.jackpot_win
+        jackpot_win: data.jackpot_win,
+        currentFreespins: freespins, // Текущие фриспины
+        newFreespins: data.freespins // Новые фриспины от комбинации
       };
       
     } catch (error) {
@@ -472,6 +461,7 @@ function App() {
             symbols={symbols}
             result={result}
             cellSize={CELL_SIZE}
+            matchedPositions={matchedPositions}
             onSpinComplete={() => {
               stopSpinLoop();
               setLoading(false);
@@ -479,11 +469,13 @@ function App() {
               // Получаем сохраненные данные
               const data = window._spinData;
               if (data) {
-                // Обновляем состояние после завершения анимации
-                if (data.balance !== undefined) setBalance(data.balance);
-                if (data.freespins !== undefined) setFreespins(data.freespins);
+                setBalance(data.balance);
+                // Правильно обновляем фриспины:
+                // Если был использован фриспин, вычитаем 1 и добавляем новые
+                const updatedFreespins = Math.max(0, data.currentFreespins - 1) + data.newFreespins;
+                setFreespins(updatedFreespins);
+                
                 if (data.payout) setPayout(data.payout);
-                if (data.usedFreespin) setUsedFreespin(true);
                 if (data.comboName) setComboName(data.comboName);
                 if (data.matchedPositions) setMatchedPositions(data.matchedPositions);
                 if (data.jackpot_win) setJackpotWin(true);
@@ -492,8 +484,8 @@ function App() {
                 delete window._spinData;
               }
               
-              // Показываем модальное окно при выигрыше или джекпоте после остановки барабанов
-              if (data && (data.payout > 0 || data.comboName || data.jackpot_win)) {
+              // Проверяем выигрыш
+              if (data?.payout > 0 || data?.jackpot_win) {
                 setShowWinModal(true);
               }
             }}
@@ -524,11 +516,6 @@ function App() {
               >
                 {autoSpin ? 'Стоп' : 'Авто'}
               </button>
-              {freespins > 0 && (
-                <div className="freespins-info">
-                  Фриспины: {freespins}
-                </div>
-              )}
             </div>
             <div className="controls-right">
               <BetSelector 
@@ -538,6 +525,8 @@ function App() {
               />
             </div>
           </div>
+          
+          <FreespinsDisplay count={freespins} />
           
           <UserStats />
         </div>
