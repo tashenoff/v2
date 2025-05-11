@@ -29,12 +29,12 @@
 
 .reel-blur-top {
   top: 0;
-  background: linear-gradient(to bottom, rgba(34, 34, 34, 1) 0%, rgba(34, 34, 34, 0) 100%);
+  background: linear-gradient(to bottom, rgba(12, 6, 89, 1) 0%, rgba(12, 6, 89, 0) 100%);
 }
 
 .reel-blur-bottom {
   bottom: 0;
-  background: linear-gradient(to top, rgba(34, 34, 34, 1) 0%, rgba(34, 34, 34, 0) 100%);
+  background: linear-gradient(to top, rgba(12, 6, 89, 1) 0%, rgba(12, 6, 89, 0) 100%);
 }
 
 @keyframes blur {

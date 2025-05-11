@@ -23,6 +23,7 @@ import './components/WinInfo.css';
 import LoginForm from './components/Auth/LoginForm';
 import RegisterForm from './components/Auth/RegisterForm';
 import { logout } from './services/auth';
+import AnimatedNumber from './components/AnimatedNumber';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -82,7 +83,8 @@ const FreespinsDisplay = ({ count }) => (
     margin: '10px 20px',
     display: 'block' // Всегда показываем блок
   }}>
-    🎰 {count > 0 ? `Доступно фриспинов: ${count}` : 'Нет доступных фриспинов'}
+    🎰 {count > 0 ? `Доступно фриспинов: ` : 'Нет доступных фриспинов'}
+    {count > 0 && <AnimatedNumber value={count} duration={800} />}
   </div>
 );
 
@@ -103,7 +105,8 @@ function App() {
     setError,
     setSymbols,
     setBalance,
-    setFreespins
+    setFreespins,
+    setAutoUpdateEnabled
   } = useGameState();
 
   console.log('useGameState hook initialized:', {
@@ -249,41 +252,38 @@ function App() {
 
   const handleSpin = async () => {
     try {
-      console.log('Starting spin with freespins:', freespins);
-
-      // 1. Блокируем кнопку
       setLoading(true);
       
-      // 2. Получаем результат от сервера
-      const data = await spin(bet);
-      console.log('Server response:', {
-        currentFreespins: freespins,
-        newFreespins: data.freespins,
-        balance: data.balance
-      });
+      // Отключаем автоматическое обновление баланса во время вращения
+      setAutoUpdateEnabled(false);
       
-      // Запускаем анимацию и звуки
+      const data = await spin(bet);
+      
       playSpinClick();
       playSpinLoop();
       
-      // Устанавливаем результат для отображения
       setResult(data.result);
       
-      // Сохраняем все необходимые данные
+      // Сохраняем данные для использования после завершения анимации
       window._spinData = {
         balance: data.balance,
         payout: data.payout,
         comboName: data.combo_name,
-        matchedPositions: data.matchedPositions,
+        matchedPositions: data.matched_positions,
         jackpot_win: data.jackpot_win,
-        currentFreespins: freespins, // Текущие фриспины
-        newFreespins: data.freespins // Новые фриспины от комбинации
+        currentFreespins: freespins,
+        newFreespins: data.freespins
       };
       
+      // Не обновляем баланс сразу, а ждём завершения анимации
+      // Баланс будет обновлен в onSpinComplete
+      
     } catch (error) {
-      console.error('Spin error:', error);
-      setError(error.message || 'Произошла ошибка при вращении');
+      setError(error.message);
       setLoading(false);
+      stopSpinLoop();
+      // В случае ошибки включаем автоматическое обновление баланса
+      setAutoUpdateEnabled(true);
     }
   };
 
@@ -462,32 +462,37 @@ function App() {
             result={result}
             cellSize={CELL_SIZE}
             matchedPositions={matchedPositions}
-            onSpinComplete={() => {
+            onSpinComplete={async () => {
               stopSpinLoop();
               setLoading(false);
               
-              // Получаем сохраненные данные
               const data = window._spinData;
+              
               if (data) {
+                // Используем данные, полученные ранее в handleSpin, вместо дополнительного запроса
                 setBalance(data.balance);
-                // Правильно обновляем фриспины:
-                // Если был использован фриспин, вычитаем 1 и добавляем новые
-                const updatedFreespins = Math.max(0, data.currentFreespins - 1) + data.newFreespins;
-                setFreespins(updatedFreespins);
+                setFreespins(data.newFreespins);
                 
-                if (data.payout) setPayout(data.payout);
+                if (data.payout) {
+                  setPayout(data.payout);
+                  // Показываем окно выигрыша
+                  setShowWinModal(true);
+                }
+                
                 if (data.comboName) setComboName(data.comboName);
                 if (data.matchedPositions) setMatchedPositions(data.matchedPositions);
                 if (data.jackpot_win) setJackpotWin(true);
                 
-                // Очищаем сохраненные данные
                 delete window._spinData;
+                
+                // Показываем окно выигрыша
+                if (data.payout > 0 || data.jackpot_win) {
+                  setShowWinModal(true);
+                }
               }
               
-              // Проверяем выигрыш
-              if (data?.payout > 0 || data?.jackpot_win) {
-                setShowWinModal(true);
-              }
+              // Включаем автоматическое обновление баланса после завершения анимации
+              setAutoUpdateEnabled(true);
             }}
           />
           <Modal 

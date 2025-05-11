@@ -10,15 +10,24 @@ export function useGameState() {
   const [bet, setBetState] = useState(10000);
   const [noChips, setNoChips] = useState(false);
   const [error, setError] = useState('');
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(true);
+
+  // Добавляем эффект для автоматического обновления баланса
+  useEffect(() => {
+    if (!autoUpdateEnabled) return;
+    
+    const updateInterval = setInterval(fetchState, 2000); // Обновляем каждые 2 секунды
+    return () => clearInterval(updateInterval);
+  }, [autoUpdateEnabled]);
 
   const fetchState = async () => {
     console.log('Fetching game state...');
     try {
-    const data = await getBalance();
+      const data = await getBalance();
       console.log('Game state received:', data);
-    setBalance(data.balance);
-    setFreespins(data.freespins);
-    setNoChips(data.balance <= 0 && data.freespins === 0);
+      setBalance(data.balance);
+      setFreespins(data.freespins);
+      setNoChips(data.balance <= 0 && data.freespins === 0);
     } catch (error) {
       console.error('Error fetching game state:', error);
     }
@@ -116,6 +125,7 @@ export function useGameState() {
     setError,
     setSymbols,
     setBalance,
-    setFreespins
+    setFreespins,
+    setAutoUpdateEnabled
   };
 } 

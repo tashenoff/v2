@@ -44,7 +44,7 @@ function Reel({ symbols, getSymbolEmoji, matched = [], cellSize, imgSize, emojiS
       height: cellSize * 3,
       overflow: 'hidden',
       borderRadius: 12,
-      background: '#222',
+      background: '#0c0659',
       boxShadow: '0 2px 6px #0002',
       position: 'relative'
     }}>

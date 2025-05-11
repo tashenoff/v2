@@ -1,0 +1,24 @@
+.animated-number {
+  display: inline-block;
+  transition: color 0.3s ease;
+}
+
+.animated-number.increasing {
+  color: #4caf50; /* Зеленый цвет для увеличения */
+}
+
+.animated-number.decreasing {
+  color: #f44336; /* Красный цвет для уменьшения */
+}
+
+/* Добавляем анимацию свечения для выигрыша */
+@keyframes glowing {
+  0% { text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
+  50% { text-shadow: 0 0 20px rgba(255, 215, 0, 0.8); }
+  100% { text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
+}
+
+.win-value .animated-number {
+  animation: glowing 1.5s infinite;
+  color: #ffd700; /* Золотой цвет для выигрыша */
+} 

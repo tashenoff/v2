@@ -154,8 +154,10 @@ def spin():
     if user['freespins'] > 0:
         user['freespins'] -= 1
         used_freespin = True
+        print(f"Using freespin. Freespins left: {user['freespins']}")
     else:
         user['balance'] -= bet
+        print(f"Deducting bet {bet} from balance. New balance: {user['balance']}")
 
     # --- Джекпот шанс из конфига ---
     jackpot_chance = CONFIG.get('jackpot_chance', 0.01)
@@ -169,14 +171,17 @@ def spin():
         combo_name = jackpot_combo.get('name')
         jackpot_win = True
         
+        # Всегда добавляем выигрыш к балансу, независимо от использования фриспина
+        user['balance'] += payout
+        
+        # Возвращаем ставку только если не использовался фриспин
         if not used_freespin:
-            user['balance'] += payout
             user['balance'] += bet
         
         # Обновляем статистику
         update_statistics(
             user_id, bet, payout,
-            is_jackpot=True,
+            is_jackpot=jackpot_win,
             combo_name=combo_name,
             pattern=result
         )
@@ -259,16 +264,20 @@ def spin():
                 combo_name = combo.get('name')
 
     # Обновление баланса и фриспинов
-    if used_freespin:
-        if payout > 0:
-            user['balance'] += payout
-    else:
-        if payout > 0 or freespins > 0:
-            user['balance'] += bet
-        if payout > 0:
-            user['balance'] += payout
+    print(f"Before balance update - Balance: {user['balance']}, Payout: {payout}, Used freespin: {used_freespin}")
+    
+    # Всегда добавляем выигрыш к балансу, независимо от того, использовался фриспин или нет
+    if payout > 0:
+        user['balance'] += payout
+        print(f"Adding payout {payout} to balance. New balance: {user['balance']}")
+    
+    # Возвращаем ставку только если не использовался фриспин
+    if not used_freespin and (payout > 0 or freespins > 0):
+        user['balance'] += bet
+        print(f"Returning bet {bet} to balance. New balance: {user['balance']}")
     
     user['freespins'] += freespins
+    print(f"Final balance update - Balance: {user['balance']}, Freespins: {user['freespins']}")
     
     # Увеличиваем джекпот на 1% от ставки
     if not used_freespin:
@@ -278,7 +287,7 @@ def spin():
     # Обновляем статистику
     update_statistics(
         user_id, bet, payout,
-        is_jackpot=False,
+        is_jackpot=jackpot_win,
         combo_name=combo_name,
         pattern=result
     )

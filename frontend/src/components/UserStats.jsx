@@ -18,6 +18,9 @@ function UserStats() {
 
   useEffect(() => {
     fetchStats();
+    // Обновляем статистику каждые 2 секунды во время игры
+    const interval = setInterval(fetchStats, 2000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchStats = async () => {

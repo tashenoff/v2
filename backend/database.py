@@ -104,12 +104,19 @@ def create_user(username, hashed_password):
             # Получаем начальный баланс из конфигурации
             initial_balance = CONFIG.get('initial_balance', 1000)
             
+            print(f"Creating new user: {username}")
             c.execute('INSERT INTO users (username, password, balance) VALUES (?, ?, ?)',
                      (username, hashed_password, initial_balance))
             user_id = c.lastrowid
+            print(f"Created user with ID: {user_id}")
             
             # Создаем запись в статистике для нового пользователя
             c.execute('INSERT INTO statistics (user_id) VALUES (?)', (user_id,))
+            
+            # Проверяем, что запись создана
+            c.execute('SELECT * FROM statistics WHERE user_id = ?', (user_id,))
+            stats = c.fetchone()
+            print(f"Created statistics record: {dict(stats) if stats else None}")
             
             conn.commit()
             return user_id
@@ -147,11 +154,29 @@ def update_user_balance(user_id, new_balance, new_freespins):
     conn = get_db()
     if conn is not None:
         try:
+            print(f"Updating user {user_id} balance in database:")
+            print(f"- New balance: {new_balance}")
+            print(f"- New freespins: {new_freespins}")
+            
             c = conn.cursor()
+            
+            # Получаем текущие значения
+            c.execute('SELECT balance, freespins FROM users WHERE id = ?', (user_id,))
+            current = c.fetchone()
+            if current:
+                print(f"- Current values in DB - Balance: {current['balance']}, Freespins: {current['freespins']}")
+            
             c.execute('''
                 UPDATE users 
                 SET balance = ?, freespins = ? 
                 WHERE id = ?''', (new_balance, new_freespins, user_id))
+            
+            # Проверяем обновленные значения
+            c.execute('SELECT balance, freespins FROM users WHERE id = ?', (user_id,))
+            updated = c.fetchone()
+            if updated:
+                print(f"- Updated values in DB - Balance: {updated['balance']}, Freespins: {updated['freespins']}")
+            
             conn.commit()
             return True
         except Error as e:
@@ -166,6 +191,17 @@ def update_statistics(user_id, bet, win, is_jackpot=False, combo_name=None, patt
         try:
             c = conn.cursor()
             
+            print(f"Updating statistics for user {user_id}:")
+            print(f"- Bet: {bet}")
+            print(f"- Win: {win}")
+            print(f"- Is Jackpot: {is_jackpot}")
+            print(f"- Combo Name: {combo_name}")
+            
+            # Получаем текущую статистику
+            c.execute('SELECT jackpot_wins FROM statistics WHERE user_id = ?', (user_id,))
+            current_stats = c.fetchone()
+            print(f"- Current jackpot wins: {dict(current_stats)['jackpot_wins'] if current_stats else 0}")
+            
             # Обновляем статистику
             c.execute('''
                 UPDATE statistics 
@@ -177,6 +213,11 @@ def update_statistics(user_id, bet, win, is_jackpot=False, combo_name=None, patt
                     last_spin = CURRENT_TIMESTAMP
                 WHERE user_id = ?
             ''', (bet, win, win, win, 1 if is_jackpot else 0, user_id))
+
+            # Проверяем обновленную статистику
+            c.execute('SELECT jackpot_wins FROM statistics WHERE user_id = ?', (user_id,))
+            updated_stats = c.fetchone()
+            print(f"- Updated jackpot wins: {dict(updated_stats)['jackpot_wins'] if updated_stats else 0}")
 
             # Записываем историю игры
             if pattern:

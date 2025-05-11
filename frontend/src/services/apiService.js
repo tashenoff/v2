@@ -14,7 +14,11 @@ export async function getBalance() {
       headers: getHeaders()
     });
     if (!res.ok) throw new Error('Ошибка получения баланса');
-    return await res.json();
+    const data = await res.json();
+    return {
+      balance: data.balance || 0,
+      freespins: data.freespins || 0
+    };
   } catch (e) {
     throw new Error('Ошибка получения баланса: ' + e.message);
   }

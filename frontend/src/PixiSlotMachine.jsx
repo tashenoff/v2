@@ -377,7 +377,7 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
     const app = new PIXI.Application({
       width: cellSize * 5 + 40,
       height: cellSize * 3 + 20,
-      backgroundColor: 0x222222,
+      backgroundColor: 0x0c0659,
       resolution: window.devicePixelRatio || 1,
       autoDensity: true,
       antialias: true,
