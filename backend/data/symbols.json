@@ -17,21 +17,26 @@
   {
     "id": "bar",
     "emoji": "🟫",
-    "image": "freespin.png"
+    "image": "bar.png"
   },
   {
     "id": "diamond",
     "emoji": "💎",
-    "image": null
+    "image": "diamond.png"
   },
   {
     "id": "wild",
     "emoji": "🃏",
-    "image": null
+    "image": "wild.png"
   },
   {
     "id": "scatter",
     "emoji": "⭐",
-    "image": null
+    "image": "scatter.png"
+  },
+  {
+    "id": "*",
+    "emoji": "⬜",
+    "image": "placeholder.png"
   }
 ] 

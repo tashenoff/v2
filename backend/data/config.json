@@ -1,7 +1,7 @@
 {
-  "always_win": false,
+  "always_win": true,
   "win_chance": 0.1,
-  "initial_balance": 100000,
+  "initial_balance": 2000000,
   "bets": [10000, 50000, 100000],
   "bet_multipliers": [1, 5, 10],
   "initial_jackpot": 5000,

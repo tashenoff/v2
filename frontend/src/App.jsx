@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, Component } from 'react';
 import { getBalance, getSymbols, spin, fetchBet as apiFetchBet, updateBet, getCombinations } from './services/apiService';
 import { isAuthenticated, getCurrentUser } from './services/auth';
 import SlotMachine from './SlotMachine';
+import PixiSlotMachine from './PixiSlotMachine';
 import './App.css'
 import Jackpot from './Jackpot';
 import { CELL_SIZE_DESKTOP, CELL_SIZE_MOBILE, REELS_COUNT, SYMBOLS_ON_REEL, SYMBOLS_VISIBLE, ANIMATION_LENGTH, SPIN_START_DELAY, SPIN_STOP_DELAY } from './constants';
@@ -125,6 +126,12 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(isAuthenticated());
   const [currentUser, setCurrentUser] = useState(getCurrentUser());
   const [appError, setAppError] = useState(null);
+  const [spinCount, setSpinCount] = useState(0);
+  const [totalWin, setTotalWin] = useState(0);
+  const [totalBets, setTotalBets] = useState(0);
+  const [maxWin, setMaxWin] = useState(0);
+  const [jackpotsWon, setJackpotsWon] = useState(0);
+  const [lastSpin, setLastSpin] = useState(null);
 
   // Определяем размер ячейки в зависимости от ширины экрана
   const isMobile = window.innerWidth <= 600;
@@ -233,104 +240,61 @@ function App() {
       setComboName(null);
       setResult([]);
       setMatchedPositions([[], [], [], [], []]);
+      setShowWinModal(false);
       
       // 2. Получаем результат от сервера
       const data = await spin(bet);
+      console.log('Spin response:', {
+        result: data.result,
+        payout: data.payout,
+        combo_id: data.combo_id,
+        combo_name: data.combo_name,
+        jackpot_win: data.jackpot_win
+      });
+
+      // Добавляем логирование комбинаций
+      console.log('Комбинации на поле:');
+      const matrix = [
+        data.result.slice(0, 3),
+        data.result.slice(3, 6),
+        data.result.slice(6, 9),
+        data.result.slice(9, 12),
+        data.result.slice(12, 15)
+      ];
       
-      // 3. После получения результата запускаем звуки и анимацию
+      console.table(matrix);
+      
+      if (data.combo_name) {
+        console.log('%cВыигрышная комбинация: ' + data.combo_name, 'color: #ffd700; font-weight: bold;');
+        console.log('%cВыигрыш: ' + data.payout + ' ₽', 'color: #00ff00; font-weight: bold;');
+      }
+      
+      if (data.jackpot_win) {
+        console.log('%cДЖЕКПОТ!', 'color: #ff0000; font-size: 20px; font-weight: bold;');
+      }
+      
+      // 3. После получения результата запускаем звуки
       playSpinClick();
       playSpinLoop();
       
-      // 4. Формируем финальные барабаны из полученного результата
-      let finalReels;
-      if (data.result.length === 15) {
-        finalReels = [0,1,2,3,4].map(i => data.result.slice(i*3, i*3+3));
-      } else if (data.result.length === 5) {
-        finalReels = [0,1,2,3,4].map(i => [
-          symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : '',
-          data.result[i],
-          symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : ''
-        ]);
-      }
-
-      // 5. Для каждого барабана формируем массив для анимации
-      const ANIMATION_SYMBOLS = 15;
-      const reelsForAnimation = finalReels.map(final3 => {
-        const randoms = Array.from(
-          {length: ANIMATION_SYMBOLS - 3}, 
-          () => symbols.length ? symbols[Math.floor(Math.random()*symbols.length)].id : ''
-        );
-        return [...randoms, ...final3];
-      });
-
-      // 6. Запускаем анимацию для каждого барабана с задержкой
-      const START_DELAY = 200;
-      reelsForAnimation.forEach((arr, i) => {
-        setTimeout(() => {
-          setReelsState(prev => prev.map((r, idx) =>
-            idx === i ? { symbols: arr, animating: true } : r
-          ));
-        }, i * START_DELAY);
-      });
-
-      // 7. Останавливаем барабаны с задержкой
-      const STOP_DELAY = 250;
-      finalReels.forEach((finalArr, i) => {
-        setTimeout(() => {
-          setReelsState(prev => prev.map((r, idx) =>
-            idx === i ? { symbols: finalArr, animating: false } : r
-          ));
-        }, 1000 + i * STOP_DELAY + i * START_DELAY);
-      });
-
-      // 8. После остановки всех барабанов обновляем состояние игры
-      const TOTAL_ANIMATION_TIME = 1000 + REELS_COUNT * STOP_DELAY + REELS_COUNT * START_DELAY + 200;
-      setTimeout(() => {
-        setResult(data.result);
-        setPayout(data.payout);
-        setComboName(data.combo_name);
-        
-        // Определяем совпавшие позиции
-        let matched = [[], [], [], [], []];
-        if (data.result && data.combo_id) {
-          if (data.result.length === 15 && data.combo_id) {
-            if (data.combo_id.includes('center')) {
-              for (let i = 0; i < 5; i++) matched[i] = [1];
-            }
-          }
-          if (data.result.length === 5 && data.combo_id) {
-            for (let i = 0; i < 5; i++) matched[i] = [1];
-          }
-        }
-        setMatchedPositions(matched);
-        
-        // Обновляем состояние игры
-        fetchState();
-        if (data.freespins < freespins) setUsedFreespin(true);
-        if (data.error) setError(data.error);
-        setLoading(false);
-        if (data.error || data.balance <= 0) setAutoSpin(false);
-        
-        // Обрабатываем джекпот
-        if (data.jackpot_win) {
-          setJackpotWin(true);
-          setTimeout(() => setJackpotWin(false), 2000);
-        }
-        
-        stopSpinLoop();
-        
-        // Показываем модальное окно при выигрыше
-        if (data.payout > 0 || data.combo_name) {
-          setShowWinModal(true);
-        }
-      }, TOTAL_ANIMATION_TIME);
-
+      // 4. Устанавливаем результат для отображения в PixiSlotMachine
+      setResult(data.result);
+      
+      // Сохраняем данные для использования после завершения анимации
+      window._spinData = {
+        balance: data.balance,
+        freespins: data.freespins,
+        payout: data.payout,
+        usedFreespin: data.usedFreespin,
+        comboName: data.comboName,
+        matchedPositions: data.matchedPositions,
+        jackpot_win: data.jackpot_win
+      };
+      
     } catch (error) {
-      console.error('Ошибка при вращении:', error);
-      setError('Произошла ошибка при вращении');
+      console.error('Spin error:', error);
+      setError(error.message || 'Произошла ошибка при вращении');
       setLoading(false);
-      stopSpinLoop();
-      setAutoSpin(false);
     }
   };
 
@@ -493,33 +457,46 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <Layout>
+      <Layout
+        currentUser={currentUser}
+        setIsLoggedIn={setIsLoggedIn}
+        setCurrentUser={setCurrentUser}
+      >
         <div className="app-card">
-          <div className="user-info">
-            <span className="username">Привет, {currentUser?.username}!</span>
-            <button 
-              className="logout-btn"
-              onClick={() => {
-                logout();
-                setIsLoggedIn(false);
-                setCurrentUser(null);
-              }}
-            >
-              Выйти
-            </button>
-          </div>
           <div className="top-stats">
             <TopBalance balance={balance} />
             <TopBet bet={bet} />
           </div>
           <Jackpot />
-          <SlotMachine
-            reels={reelsState.map(r => r.symbols || [])}
-            getSymbolEmoji={getSymbolEmoji}
-            matchedPositions={matchedPositions}
+          <PixiSlotMachine 
+            symbols={symbols}
+            result={result}
             cellSize={CELL_SIZE}
-            imgSize={imgSize}
-            emojiSize={emojiSize}
+            onSpinComplete={() => {
+              stopSpinLoop();
+              setLoading(false);
+              
+              // Получаем сохраненные данные
+              const data = window._spinData;
+              if (data) {
+                // Обновляем состояние после завершения анимации
+                if (data.balance !== undefined) setBalance(data.balance);
+                if (data.freespins !== undefined) setFreespins(data.freespins);
+                if (data.payout) setPayout(data.payout);
+                if (data.usedFreespin) setUsedFreespin(true);
+                if (data.comboName) setComboName(data.comboName);
+                if (data.matchedPositions) setMatchedPositions(data.matchedPositions);
+                if (data.jackpot_win) setJackpotWin(true);
+                
+                // Очищаем сохраненные данные
+                delete window._spinData;
+              }
+              
+              // Показываем модальное окно при выигрыше или джекпоте после остановки барабанов
+              if (data && (data.payout > 0 || data.comboName || data.jackpot_win)) {
+                setShowWinModal(true);
+              }
+            }}
           />
           <Modal 
             isOpen={showWinModal} 

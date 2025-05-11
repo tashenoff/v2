@@ -223,16 +223,27 @@ def spin():
     # Проверка выигрыша
     for combo in COMBINATIONS:
         if combo.get('line') == 'center' and result == combo['pattern']:
-            base_payout = combo.get('payout', 0)
-            try:
-                idx = bets.index(bet)
-                multiplier = bet_multipliers[idx]
-            except ValueError:
-                multiplier = 1
-            payout = base_payout * multiplier
+            # Проверяем, является ли это комбинацией джекпота
+            if combo.get('jackpot'):
+                payout = current_jackpot
+                combo_id = combo.get('id')
+                combo_name = combo.get('name')
+                jackpot_win = True
+                # Сбрасываем джекпот на начальное значение
+                update_jackpot(CONFIG.get('initial_jackpot', 5000))
+            else:
+                base_payout = combo.get('payout', 0)
+                try:
+                    idx = bets.index(bet)
+                    multiplier = bet_multipliers[idx]
+                except ValueError:
+                    multiplier = 1
+                payout = base_payout * multiplier
+            
             freespins = combo.get('freespins', 0)
             combo_id = combo.get('id')
             combo_name = combo.get('name')
+            
         if combo.get('anywhere'):
             count = sum(1 for r in result if r == combo['pattern'][0])
             if count >= len(combo['pattern']):

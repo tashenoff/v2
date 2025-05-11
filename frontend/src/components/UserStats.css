@@ -36,4 +36,88 @@
   .stat-value {
     font-size: 1.1em;
   }
+}
+
+.stats-container {
+  width: 100%;
+  margin-top: 20px;
+}
+
+.toggle-stats-btn {
+  width: 100%;
+  background: #1c1c1c;
+  border: none;
+  padding: 10px;
+  color: #ffd700;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  transition: background-color 0.2s;
+}
+
+.toggle-stats-btn:hover {
+  background: #2a2a2a;
+}
+
+.stats-content {
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
+}
+
+.stats-content.visible {
+  max-height: 1000px;
+  opacity: 1;
+}
+
+.stats-content.hidden {
+  max-height: 0;
+  opacity: 0;
+}
+
+.user-stats {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 15px;
+  border-radius: 0 0 8px 8px;
+  color: white;
+}
+
+.stat-item {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.stat-label {
+  color: #888;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.stat-value {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+@media (max-width: 600px) {
+  .toggle-stats-btn {
+    font-size: 12px;
+    padding: 8px;
+  }
+
+  .user-stats {
+    padding: 10px;
+  }
+
+  .stat-item {
+    padding: 8px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+  }
+
+  .stat-value {
+    font-size: 14px;
+  }
 } 

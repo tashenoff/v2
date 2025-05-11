@@ -1,18 +1,23 @@
 import React from 'react';
+import Header from './components/Header';
+import './components/Header.css';
 import './Layout.css';
 
-const Layout = ({ children }) => (
-  <div className="layout-root">
-    <header className="layout-header">
-      <span className="layout-title">Слот-машина</span>
-    </header>
-      <main className="layout-main">
+const Layout = ({ children, currentUser, setIsLoggedIn, setCurrentUser }) => {
+  return (
+    <div className="layout">
+      {currentUser && (
+        <Header 
+          currentUser={currentUser}
+          setIsLoggedIn={setIsLoggedIn}
+          setCurrentUser={setCurrentUser}
+        />
+      )}
+      <main className="main-content">
         {children}
       </main>
-    <footer className="layout-footer">
-      <span>© 2024 Слот-машина</span>
-    </footer>
-  </div>
-);
+    </div>
+  );
+};
 
 export default Layout; 

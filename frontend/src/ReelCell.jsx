@@ -13,7 +13,7 @@ const ReelCell = memo(({ id, getSymbolEmoji, matched, cellSize, imgSize, emojiSi
       }}
     >
       <div className="symbol-wrapper">
-        {getSymbolEmoji(id, imgSize, emojiSize)}
+      {getSymbolEmoji(id, imgSize, emojiSize)}
       </div>
     </div>
   );
