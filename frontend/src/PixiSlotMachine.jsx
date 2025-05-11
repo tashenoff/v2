@@ -147,7 +147,8 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
    * Получение случайного символа
    */
   const getRandomSymbolId = () => {
-    return symbols[Math.floor(Math.random() * symbols.length)]?.id;
+    const availableSymbols = symbols.filter(s => s.id !== '*');
+    return availableSymbols[Math.floor(Math.random() * availableSymbols.length)]?.id;
   };
 
   /**
@@ -375,8 +376,8 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
     if (!canvasRef.current || appRef.current) return;
 
     const app = new PIXI.Application({
-      width: cellSize * 5 + 40,
-      height: cellSize * 3 + 20,
+      width: cellSize * 5,
+      height: cellSize * 3,
       backgroundColor: 0x0c0659,
       resolution: window.devicePixelRatio || 1,
       autoDensity: true,
@@ -397,25 +398,70 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
       }, 100);
     }, false);
 
+    // Создаем основной контейнер для всех элементов
+    const mainContainer = new PIXI.Container();
+    mainContainer.width = cellSize * 5;
+    mainContainer.height = cellSize * 3;
+    app.stage.addChild(mainContainer);
+
     // Создаем контейнер для барабанов
     const reelsContainer = new PIXI.Container();
-    reelsContainer.x = 20;
-    reelsContainer.y = 10;
-    app.stage.addChild(reelsContainer);
+    reelsContainer.width = cellSize * 5;
+    reelsContainer.height = cellSize * 3;
+    mainContainer.addChild(reelsContainer);
+
+    // Создаем контейнер для разделителей
+    const dividersContainer = new PIXI.Container();
+    mainContainer.addChild(dividersContainer);
+
+    // Создаем контейнер для альфа-маски колонок
+    const columnOverlayContainer = new PIXI.Container();
+    columnOverlayContainer.width = cellSize * 5;
+    columnOverlayContainer.height = cellSize * 3;
+    mainContainer.addChild(columnOverlayContainer);
+
+    // Создаем фон для колонок
+    const createColumnOverlay = () => {
+      // Загружаем текстуру фона колонки
+      const columnTexture = PIXI.Texture.from('/assets/col.png');
+      
+      // Создаем спрайты для каждой колонки
+      for (let i = 0; i < 5; i++) {
+        const columnOverlay = new PIXI.Sprite(columnTexture);
+        columnOverlay.width = cellSize;
+        columnOverlay.height = cellSize * 3;
+        columnOverlay.x = i * cellSize;
+        columnOverlay.y = 0;
+        columnOverlay.alpha = 1;
+        app.stage.addChild(columnOverlay); // Добавляем прямо в stage
+      }
+    };
+
+    // Создаем разделители между барабанами
+    const createDividers = () => {
+      for (let i = 1; i < 5; i++) {
+        const divider = new PIXI.Graphics();
+        divider.beginFill(0x000000);
+        divider.drawRect(i * cellSize - 1, 0, 2, cellSize * 3);
+        divider.endFill();
+        dividersContainer.addChild(divider);
+      }
+    };
 
     // Создаем маску для контейнера барабанов
     const mask = new PIXI.Graphics();
     mask.beginFill(0xffffff);
     mask.drawRect(0, 0, cellSize * 5, cellSize * 3);
     mask.endFill();
-    mask.x = reelsContainer.x;
-    mask.y = reelsContainer.y;
     reelsContainer.mask = mask;
     app.stage.addChild(mask);
 
-    // Загружаем текстуры и создаем барабаны
+    // Загружаем текстуры и создаем элементы
     loadTextures(app).then(() => {
       createReels();
+      createDividers();
+      // Создаем колонки в самом конце
+      setTimeout(() => createColumnOverlay(), 100);
     });
 
     return () => {
