@@ -11,6 +11,29 @@ export function useGameState() {
   const [noChips, setNoChips] = useState(false);
   const [error, setError] = useState('');
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(true);
+  const [symbolsLoaded, setSymbolsLoaded] = useState(false);
+
+  // Явно загружаем символы сразу при инициализации
+  useEffect(() => {
+    console.log('useGameState - Explicit symbols loading effect started');
+    const loadSymbols = async () => {
+      try {
+        const symbolsData = await getSymbols();
+        console.log('useGameState - Symbols loaded explicitly:', symbolsData.length);
+        if (symbolsData && symbolsData.length > 0) {
+          setSymbols(symbolsData);
+          setSymbolsLoaded(true);
+          console.log('useGameState - Symbols sample:', symbolsData.slice(0, 3));
+        } else {
+          console.error('useGameState - Empty symbols data received');
+        }
+      } catch (error) {
+        console.error('useGameState - Error loading symbols:', error);
+      }
+    };
+    
+    loadSymbols();
+  }, []);
 
   // Добавляем эффект для автоматического обновления баланса
   useEffect(() => {
@@ -98,10 +121,6 @@ export function useGameState() {
     console.log('useGameState initialization effect started');
     Promise.all([
       fetchState(),
-      getSymbols().then(symbols => {
-        console.log('Symbols loaded:', symbols.length);
-        setSymbols(symbols);
-      }),
       fetchBet().then(data => {
         console.log('Initial bet loaded:', data.bet);
         setBetState(data.bet);
@@ -110,6 +129,11 @@ export function useGameState() {
       console.error('Error in initialization effect:', error);
     });
   }, []);
+
+  // Добавляем эффект для мониторинга символов
+  useEffect(() => {
+    console.log('useGameState - symbols updated, count:', symbols.length);
+  }, [symbols]);
 
   return {
     balance,
@@ -126,6 +150,7 @@ export function useGameState() {
     setSymbols,
     setBalance,
     setFreespins,
-    setAutoUpdateEnabled
+    setAutoUpdateEnabled,
+    symbolsLoaded
   };
 } 

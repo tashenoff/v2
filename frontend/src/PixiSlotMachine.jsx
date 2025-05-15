@@ -16,7 +16,7 @@ const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 /**
  * Компонент слот-машины на PIXI.js
  */
-const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => {
+const PixiSlotMachine = ({ symbols, result = [], cellSize, matchedPositions = [], onSpinComplete }) => {
   // Рефы
   const canvasRef = useRef(null);
   const appRef = useRef(null);
@@ -24,6 +24,21 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
   const symbolsTexturesRef = useRef({});
   const emojisTexturesRef = useRef({});
   const loadingRef = useRef(false);
+  const contextLostRef = useRef(false);
+  
+  // Диагностика
+  useEffect(() => {
+    console.log('PixiSlotMachine - props updated:', { 
+      symbolsCount: symbols?.length,
+      cellSize,
+      resultLength: result?.length,
+      matchedPositionsLength: matchedPositions?.length
+    });
+    
+    if (symbols && symbols.length) {
+      console.log('Symbols sample:', symbols.slice(0, 3));
+    }
+  }, [symbols, result, cellSize, matchedPositions]);
 
   /**
    * Создание текстуры из emoji
@@ -66,6 +81,13 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
     // Очищаем предыдущие текстуры
     symbolsTexturesRef.current = {};
     emojisTexturesRef.current = {};
+    
+    // Проверка на наличие символов
+    if (!symbols || symbols.length === 0) {
+      console.error('No symbols provided to loadTextures');
+      loadingRef.current = false;
+      return false;
+    }
     
     for (const symbol of symbols) {
       try {
@@ -160,6 +182,12 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
       console.error('PIXI Application not initialized');
       return;
     }
+    
+    // Проверка на наличие символов перед созданием барабанов
+    if (!symbols || symbols.length === 0) {
+      console.error('Cannot create reels: No symbols available');
+      return;
+    }
 
     reelsRef.current.forEach(reel => reel.destroy());
     reelsRef.current = [];
@@ -230,7 +258,9 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
     const promises = reels.map((reel, i) => spinSingleReel(reel, i, resultMatrix[i]));
 
     await Promise.all(promises);
-    // Вызываем callback после завершения анимации всех барабанов
+    
+    // Просто сообщаем о завершении вращения барабанов
+    // Все данные о выигрыше уже хранятся в SpinLogic
     onSpinComplete?.();
   };
 
@@ -390,12 +420,22 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
     canvasRef.current.appendChild(app.view);
     appRef.current = app;
 
+    // Обработчик потери WebGL контекста
     app.view.addEventListener('webglcontextlost', (e) => {
       e.preventDefault();
-      console.log('WebGL контекст потерян, восстанавливаем...');
-      setTimeout(() => {
-        appRef.current.renderer.gl.getExtension('WEBGL_lose_context').restoreContext();
-      }, 100);
+      console.log('WebGL контекст потерян');
+      contextLostRef.current = true;
+    }, false);
+    
+    // Обработчик восстановления WebGL контекста
+    app.view.addEventListener('webglcontextrestored', () => {
+      console.log('WebGL контекст восстановлен');
+      contextLostRef.current = false;
+      
+      // Перезагружаем ресурсы после восстановления контекста
+      loadTextures(app).then(() => {
+        createReels();
+      });
     }, false);
 
     // Создаем основной контейнер для всех элементов
@@ -422,18 +462,22 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
 
     // Создаем фон для колонок
     const createColumnOverlay = () => {
-      // Загружаем текстуру фона колонки
-      const columnTexture = PIXI.Texture.from('/assets/col.png');
-      
-      // Создаем спрайты для каждой колонки
-      for (let i = 0; i < 5; i++) {
-        const columnOverlay = new PIXI.Sprite(columnTexture);
-        columnOverlay.width = cellSize;
-        columnOverlay.height = cellSize * 3;
-        columnOverlay.x = i * cellSize;
-        columnOverlay.y = 0;
-        columnOverlay.alpha = 1;
-        app.stage.addChild(columnOverlay); // Добавляем прямо в stage
+      try {
+        // Загружаем текстуру фона колонки
+        const columnTexture = PIXI.Texture.from('/assets/col.png');
+        
+        // Создаем спрайты для каждой колонки
+        for (let i = 0; i < 5; i++) {
+          const columnOverlay = new PIXI.Sprite(columnTexture);
+          columnOverlay.width = cellSize;
+          columnOverlay.height = cellSize * 3;
+          columnOverlay.x = i * cellSize;
+          columnOverlay.y = 0;
+          columnOverlay.alpha = 1;
+          app.stage.addChild(columnOverlay); // Добавляем прямо в stage
+        }
+      } catch (error) {
+        console.error('Ошибка при создании фона колонок:', error);
       }
     };
 
@@ -456,13 +500,18 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
     reelsContainer.mask = mask;
     app.stage.addChild(mask);
 
-    // Загружаем текстуры и создаем элементы
-    loadTextures(app).then(() => {
-      createReels();
-      createDividers();
-      // Создаем колонки в самом конце
-      setTimeout(() => createColumnOverlay(), 100);
-    });
+    // Вместо загрузки текстур здесь, мы будем делать это через эффект, который отслеживает изменение symbols
+    // Стандартные элементы интерфейса, которые не зависят от symbols
+    createDividers();
+    
+    // Создаем колонки
+    setTimeout(() => {
+      try {
+        createColumnOverlay();
+      } catch (error) {
+        console.error('Ошибка при создании фона колонок:', error);
+      }
+    }, 100);
 
     return () => {
       app.destroy(true);
@@ -474,10 +523,31 @@ const PixiSlotMachine = ({ symbols, result = [], cellSize, onSpinComplete }) => 
    * Запуск вращения при изменении результата
    */
   useEffect(() => {
-    if (result.length) {
+    console.log('Result changed:', result);
+    if (result && result.length) {
       spinReels(result);
     }
   }, [result]);
+
+  /**
+   * Отслеживаем изменения в symbols, чтобы пересоздать барабаны при их изменении
+   */
+  useEffect(() => {
+    console.log('PixiSlotMachine - Symbols changed:', symbols?.length);
+    if (!appRef.current || !symbols || symbols.length === 0) return;
+    
+    // Загружаем текстуры и создаем барабаны для новых символов
+    loadTextures(appRef.current).then(success => {
+      if (success) {
+        console.log('PixiSlotMachine - Textures loaded, creating reels');
+        createReels();
+      } else {
+        console.error('PixiSlotMachine - Failed to load textures');
+      }
+    }).catch(error => {
+      console.error('PixiSlotMachine - Error loading textures:', error);
+    });
+  }, [symbols]);
 
   return (
     <div ref={canvasRef} style={{ borderRadius: '12px', overflow: 'hidden' }} />

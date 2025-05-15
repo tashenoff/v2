@@ -25,13 +25,29 @@ export async function getBalance() {
 }
 
 export async function getSymbols() {
+  console.log('API: getSymbols - Запрос символов на сервер');
   try {
     const res = await fetch(`${API_URL}/symbols`, {
       headers: getHeaders()
     });
-    if (!res.ok) throw new Error('Ошибка получения символов');
-    return await res.json();
+    
+    if (!res.ok) {
+      console.error('API: getSymbols - Ошибка HTTP:', res.status, res.statusText);
+      throw new Error('Ошибка получения символов');
+    }
+    
+    const data = await res.json();
+    console.log('API: getSymbols - Получено символов:', data.length);
+    
+    if (data && data.length > 0) {
+      console.log('API: getSymbols - Пример символов:', data.slice(0, 2));
+    } else {
+      console.warn('API: getSymbols - Получен пустой массив символов');
+    }
+    
+    return data;
   } catch (e) {
+    console.error('API: getSymbols - Ошибка:', e);
     throw new Error('Ошибка получения символов: ' + e.message);
   }
 }
