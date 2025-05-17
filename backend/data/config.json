@@ -1,10 +1,10 @@
 {
-  "always_win": true,
-  "win_chance": 0.1,
+  "always_win": false,
+  "win_chance": 0.3,
   "initial_balance": 2000000,
   "bets": [10000, 50000, 100000],
   "bet_multipliers": [1, 5, 10],
-  "initial_jackpot": 5000,
+  "initial_jackpot": 20000,
   "jackpot_chance": 0.001,
   "background_color": "#232323",
   "background_image": "bg1.jpg"

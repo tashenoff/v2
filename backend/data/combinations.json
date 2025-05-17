@@ -7,15 +7,124 @@
     "payout": 0,
     "jackpot": true
   },
-
- 
- 
- 
+  {
+    "id": "five_seven_any",
+    "name": "5 x Семёрка (любая линия)",
+    "pattern": ["seven", "seven", "seven", "seven", "seven"],
+    "line_id": null,
+    "payout": 8000
+  },
+  {
+    "id": "five_cherry_center",
+    "name": "5 x Вишня по центру",
+    "pattern": ["cherry", "cherry", "cherry", "cherry", "cherry"],
+    "line_id": 1,
+    "payout": 4000
+  },
   {
     "id": "five_cherry_bottom",
     "name": "5 x Вишня по нижней линии",
     "pattern": ["cherry", "cherry", "cherry", "cherry", "cherry"],
     "line_id": 3,
+    "payout": 5000
+  },
+  {
+    "id": "five_cherry_top",
+    "name": "5 x Вишня по верхней линии",
+    "pattern": ["cherry", "cherry", "cherry", "cherry", "cherry"],
+    "line_id": 2,
+    "payout": 5000
+  },
+  {
+    "id": "five_cherry_v",
+    "name": "5 x Вишня по V-линии",
+    "pattern": ["cherry", "cherry", "cherry", "cherry", "cherry"],
+    "line_id": 4,
+    "payout": 6000
+  },
+  {
+    "id": "four_seven_center",
+    "name": "4 x Семёрка по центру",
+    "pattern": ["seven", "seven", "seven", "seven", "*"],
+    "line_id": 1,
+    "payout": 2000
+  },
+  {
+    "id": "four_cherry_any",
+    "name": "4 x Вишня (любая линия)",
+    "pattern": ["cherry", "cherry", "cherry", "cherry", "*"],
+    "line_id": null,
     "payout": 1500
+  },
+  {
+    "id": "four_lemon_center",
+    "name": "4 x Лимон по центру",
+    "pattern": ["lemon", "lemon", "lemon", "lemon", "*"],
+    "line_id": 1,
+    "payout": 800
+  },
+  {
+    "id": "four_lemon_any",
+    "name": "4 x Лимон (любая линия)",
+    "pattern": ["lemon", "lemon", "lemon", "lemon", "*"],
+    "line_id": null,
+    "payout": 1000
+  },
+  {
+    "id": "three_seven_center",
+    "name": "3 x Семёрка по центру",
+    "pattern": ["seven", "seven", "seven", "*", "*"],
+    "line_id": 1,
+    "payout": 400
+  },
+  {
+    "id": "three_seven_any",
+    "name": "3 x Семёрка (любая линия)",
+    "pattern": ["seven", "seven", "seven", "*", "*"],
+    "line_id": null,
+    "payout": 500
+  },
+  {
+    "id": "three_cherry_any",
+    "name": "3 x Вишня (любая линия)",
+    "pattern": ["cherry", "cherry", "cherry", "*", "*"],
+    "line_id": null,
+    "payout": 300
+  },
+  {
+    "id": "three_lemon_any",
+    "name": "3 x Лимон (любая линия)",
+    "pattern": ["lemon", "lemon", "lemon", "*", "*"],
+    "line_id": null,
+    "payout": 200
+  },
+  {
+    "id": "two_seven_center",
+    "name": "2 x Семёрка по центру",
+    "pattern": ["seven", "seven", "*", "*", "*"],
+    "line_id": 1,
+    "payout": 100
+  },
+  {
+    "id": "wild_center",
+    "name": "Wild в центре",
+    "pattern": ["*", "*", "wild", "*", "*"],
+    "line_id": 1,
+    "payout": 2000
+  },
+  {
+    "id": "wild_any",
+    "name": "Wild на любой позиции",
+    "pattern": ["wild"],
+    "anywhere": true,
+    "payout": 200
+  },
+  {
+    "id": "scatter_bonus",
+    "name": "3+ Scatter в любом месте",
+    "pattern": ["scatter", "scatter", "scatter"],
+    "anywhere": true,
+    "payout": 1000,
+    "freespins": 10
   }
 ] 
