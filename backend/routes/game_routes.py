@@ -27,6 +27,10 @@ def get_bets():
     from app import bets
     return bets
 
+def get_combination_manager():
+    from flask import current_app
+    return current_app.combination_manager
+
 @game_routes.route('/balance')
 @jwt_required()
 def get_balance():
@@ -58,20 +62,11 @@ def spin():
     data = request.get_json()
     bets_list = get_bets()
     bet = data.get('bet', min(bets_list) if bets_list else 100000)
-
-    # Инициализация переменных
-    payout = 0
-    freespins_won = 0
-    combo_id = None
-    combo_name = None
-    jackpot_win = False
-    jackpot_before = current_jackpot
-    result = []
     
     player_state = get_player_state()
     statistics_manager = get_statistics_manager()
     config = get_config()
-    combinations = get_combinations()
+    combination_manager = get_combination_manager()
 
     # Проверяем наличие фриспинов
     if player_state.has_freespins(user_id):
@@ -83,42 +78,10 @@ def spin():
         if not success:
             return jsonify({"error": error}), 400
 
-    # Джекпот шанс
-    jackpot_chance = config.get('jackpot_chance', 0.01)
-    jackpot_combo = next((c for c in combinations if c.get('jackpot')), None)
-    if jackpot_combo and random.random() < jackpot_chance:
-        result = jackpot_combo['pattern']
-        payout = jackpot_before
-        update_jackpot(config.get('initial_jackpot', 5000))
-        combo_id = jackpot_combo.get('id')
-        combo_name = jackpot_combo.get('name')
-        jackpot_win = True
-        
-        player_state.add_win(user_id, payout, bet, return_bet=True)
-        statistics_manager.update_statistics(
-            user_id, bet, payout,
-            is_jackpot=jackpot_win,
-            combo_name=combo_name,
-            pattern=result
-        )
-        
-        balance = player_state.get_balance(user_id)
-        freespins = player_state.get_freespins(user_id)
-        
-        return jsonify({
-            "result": result,
-            "payout": payout,
-            "freespins": freespins,
-            "balance": balance,
-            "combo_id": combo_id,
-            "combo_name": combo_name,
-            "jackpot_win": jackpot_win
-        })
-
     # Генерация результата
     symbols = get_symbols()
     if config.get("always_win"):
-        win_combo = random.choice(combinations)
+        win_combo = random.choice(get_combinations())
         if win_combo.get("line") == "center":
             result = win_combo["pattern"]
         elif win_combo.get("anywhere"):
@@ -128,7 +91,7 @@ def spin():
         else:
             result = [random.choice([s['id'] for s in symbols]) for _ in range(5)]
     elif config.get("win_chance", 0) > 0 and random.random() < config["win_chance"]:
-        win_combo = random.choice(combinations)
+        win_combo = random.choice(get_combinations())
         if win_combo.get("line") == "center":
             result = win_combo["pattern"]
         elif win_combo.get("anywhere"):
@@ -141,56 +104,26 @@ def spin():
         symbols_ids = [s['id'] for s in symbols]
         result = [random.choice(symbols_ids) for _ in range(5)]
 
-    # Проверка выигрыша
-    for combo in combinations:
-        if combo.get('line') == 'center' and result == combo['pattern']:
-            if combo.get('jackpot'):
-                payout = current_jackpot
-                combo_id = combo.get('id')
-                combo_name = combo.get('name')
-                jackpot_win = True
-                update_jackpot(config.get('initial_jackpot', 5000))
-            else:
-                base_payout = combo.get('payout', 0)
-                try:
-                    idx = bets_list.index(bet)
-                    multiplier = config.get('bet_multipliers', [1])[idx]
-                except (ValueError, IndexError):
-                    multiplier = 1
-                payout = base_payout * multiplier
-            
-            freespins_won = combo.get('freespins', 0)
-            combo_id = combo.get('id')
-            combo_name = combo.get('name')
-            
-        if combo.get('anywhere'):
-            count = sum(1 for r in result if r == combo['pattern'][0])
-            if count >= len(combo['pattern']):
-                base_payout = combo.get('payout', 0)
-                try:
-                    idx = bets_list.index(bet)
-                    multiplier = config.get('bet_multipliers', [1])[idx]
-                except (ValueError, IndexError):
-                    multiplier = 1
-                payout = base_payout * multiplier
-                freespins_won = combo.get('freespins', 0)
-                combo_id = combo.get('id')
-                combo_name = combo.get('name')
+    # Проверка выигрыша с помощью CombinationManager
+    win_result = combination_manager.check_win(result, bet, bets_list, current_jackpot)
+    
+    # Обновляем состояние игрока
+    player_state.add_win(user_id, win_result.payout, bet, return_bet=True)
+    if win_result.freespins_won > 0:
+        player_state.add_freespins(user_id, win_result.freespins_won)
 
-    # Обновление состояния
-    player_state.add_win(user_id, payout, bet, return_bet=True)
-    if freespins_won > 0:
-        player_state.add_freespins(user_id, freespins_won)
-
-    # Увеличиваем джекпот
-    new_jackpot = current_jackpot + int(bet * 0.01)
-    update_jackpot(new_jackpot)
+    # Обновляем джекпот
+    if win_result.is_jackpot:
+        update_jackpot(config.get('initial_jackpot', 5000))
+    else:
+        new_jackpot = current_jackpot + int(bet * 0.01)
+        update_jackpot(new_jackpot)
 
     # Обновляем статистику
     statistics_manager.update_statistics(
-        user_id, bet, payout,
-        is_jackpot=jackpot_win,
-        combo_name=combo_name,
+        user_id, bet, win_result.payout,
+        is_jackpot=win_result.is_jackpot,
+        combo_name=win_result.combo_name,
         pattern=result
     )
     
@@ -199,12 +132,12 @@ def spin():
 
     return jsonify({
         "result": result,
-        "payout": payout,
+        "payout": win_result.payout,
         "freespins": freespins,
         "balance": balance,
-        "combo_id": combo_id,
-        "combo_name": combo_name,
-        "jackpot_win": jackpot_win
+        "combo_id": win_result.combo_id,
+        "combo_name": win_result.combo_name,
+        "jackpot_win": win_result.is_jackpot
     })
 
 @game_routes.route('/bet', methods=['GET'])

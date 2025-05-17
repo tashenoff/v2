@@ -7,6 +7,7 @@ import secrets
 from database import get_db
 from player_state import PlayerState
 from statistics_manager import StatisticsManager
+from combination_manager import CombinationManager
 from routes.auth_routes import auth_routes
 from routes.game_routes import game_routes
 from routes.stats_routes import stats_routes
@@ -40,6 +41,7 @@ def create_app():
     db = get_db()
     app.player_state = PlayerState(db)
     app.statistics_manager = StatisticsManager(db)
+    app.combination_manager = CombinationManager(COMBINATIONS, CONFIG)
 
     # Регистрация Blueprint'ов
     app.register_blueprint(auth_routes, url_prefix='/api')
