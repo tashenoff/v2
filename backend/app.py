@@ -1,38 +1,16 @@
 import json
-from flask import Flask, jsonify, request
-import random
 import os
+from flask import Flask
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-import hashlib
+from flask_jwt_extended import JWTManager
 import secrets
-from database import (
-    get_user_by_username, create_user, update_user_balance,
-    get_user_by_id, get_jackpot, update_jackpot, 
-    update_user_bet, get_db
-)
+from database import get_db
 from player_state import PlayerState
 from statistics_manager import StatisticsManager
-
-app = Flask(__name__)
-CORS(app)
-
-# Конфигурация JWT
-app.config['JWT_SECRET_KEY'] = secrets.token_hex(32)  # Генерируем безопасный ключ
-jwt = JWTManager(app)
-
-# Инициализация менеджеров
-db = get_db()
-player_state = PlayerState(db)
-statistics_manager = StatisticsManager(db)
-
-def hash_password(password):
-    """Хеширует пароль с использованием SHA-256"""
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def verify_password(stored_password, provided_password):
-    """Проверяет соответствие пароля хешу"""
-    return stored_password == hash_password(provided_password)
+from routes.auth_routes import auth_routes
+from routes.game_routes import game_routes
+from routes.stats_routes import stats_routes
+from routes.config_routes import config_routes
 
 # Пути к JSON-файлам
 SYMBOLS_PATH = os.path.join(os.path.dirname(__file__), 'data', 'symbols.json')
@@ -49,336 +27,30 @@ with open(CONFIG_PATH, encoding='utf-8') as f:
 
 bets = CONFIG.get('bets', [10000])
 bet_multipliers = CONFIG.get('bet_multipliers', [1])
-# Баланс пользователя (пока в памяти)
-user_balance = CONFIG.get('initial_balance', 1000)
-user_freespins = 0
-# Ставка пользователя (по умолчанию минимальная из bets)
-user_bet = min(bets) if bets else 100
 
-# Новые эндпоинты для авторизации
-@app.route('/api/auth/register', methods=['POST'])
-def register():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    
-    print(f"Registering user: {username}")
-    
-    if not username or not password:
-        return jsonify({"error": "Необходимо указать имя пользователя и пароль"}), 400
-    
-    if get_user_by_username(username):
-        return jsonify({"error": "Пользователь с таким именем уже существует"}), 400
-    
-    hashed_password = hash_password(password)
-    user_id = create_user(username, hashed_password)
-    print(f"Created user with id: {user_id}")
-    
-    if user_id:
-        access_token = create_access_token(identity=user_id)
-        return jsonify({
-            "message": "Пользователь успешно зарегистрирован",
-            "access_token": access_token
-        }), 201
-    return jsonify({"error": "Ошибка при создании пользователя"}), 500
+def create_app():
+    app = Flask(__name__)
+    CORS(app)
 
-@app.route('/api/auth/login', methods=['POST'])
-def login():
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    
-    user = get_user_by_username(username)
-    if user and verify_password(user['password'], password):
-        access_token = create_access_token(identity=user['id'])
-        return jsonify({
-            "access_token": access_token,
-            "user": {
-                "id": user['id'],
-                "username": user['username'],
-                "balance": user['balance'],
-                "freespins": user['freespins']
-            }
-        })
-    return jsonify({"error": "Неверное имя пользователя или пароль"}), 401
+    # Конфигурация JWT
+    app.config['JWT_SECRET_KEY'] = secrets.token_hex(32)
+    jwt = JWTManager(app)
 
-# Обновленные эндпоинты с авторизацией
-@app.route('/api/balance')
-@jwt_required()
-def get_balance():
-    user_id = get_jwt_identity()
-    balance = player_state.get_balance(user_id)
-    freespins = player_state.get_freespins(user_id)
-    
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
-        
-    return jsonify({
-        "balance": balance,
-        "freespins": freespins
-    })
+    # Инициализация менеджеров
+    db = get_db()
+    app.player_state = PlayerState(db)
+    app.statistics_manager = StatisticsManager(db)
 
-@app.route('/api/statistics')
-@jwt_required()
-def get_stats():
-    user_id = get_jwt_identity()
-    stats = statistics_manager.get_statistics(user_id)
-    if stats:
-        return jsonify(stats)
-    return jsonify({"error": "Статистика не найдена"}), 404
+    # Регистрация Blueprint'ов
+    app.register_blueprint(auth_routes, url_prefix='/api')
+    app.register_blueprint(game_routes, url_prefix='/api')
+    app.register_blueprint(stats_routes, url_prefix='/api')
+    app.register_blueprint(config_routes, url_prefix='/api')
 
-@app.route('/api/spin', methods=['POST'])
-@jwt_required()
-def spin():
-    # Получаем текущее значение джекпота из базы данных
-    current_jackpot = get_jackpot()
-    
-    user_id = get_jwt_identity()
-    print(f"Spin request from user_id: {user_id}")
-    user = get_user_by_id(user_id)
-    print(f"User data: {user}")
-    
-    if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
+    return app
 
-    data = request.get_json()
-    bet = data.get('bet', min(bets) if bets else 100000)
-
-    # ИНИЦИАЛИЗАЦИЯ переменных
-    payout = 0
-    freespins_won = 0
-    combo_id = None
-    combo_name = None
-    jackpot_win = False
-    jackpot_before = current_jackpot
-    result = []  # Инициализируем result пустым списом
-
-    # Проверяем наличие фриспинов
-    if player_state.has_freespins(user_id):
-        # Используем фриспин
-        success, error = player_state.use_freespin(user_id)
-        if not success:
-            return jsonify({"error": error}), 400
-    else:
-        # Списание ставки через PlayerState
-        success, error = player_state.deduct_bet(user_id, bet)
-        if not success:
-            return jsonify({"error": error}), 400
-
-    # --- Джекпот шанс из конфига ---
-    jackpot_chance = CONFIG.get('jackpot_chance', 0.01)
-    jackpot_combo = next((c for c in COMBINATIONS if c.get('jackpot')), None)
-    if jackpot_combo and random.random() < jackpot_chance:
-        result = jackpot_combo['pattern']
-        payout = jackpot_before
-        # Сбрасываем джекпот на начальное значение
-        update_jackpot(CONFIG.get('initial_jackpot', 5000))
-        combo_id = jackpot_combo.get('id')
-        combo_name = jackpot_combo.get('name')
-        jackpot_win = True
-        
-        # Обновляем баланс через PlayerState
-        player_state.add_win(user_id, payout, bet, return_bet=True)
-        
-        # Обновляем статистику
-        statistics_manager.update_statistics(
-            user_id, bet, payout,
-            is_jackpot=jackpot_win,
-            combo_name=combo_name,
-            pattern=result
-        )
-        
-        balance = player_state.get_balance(user_id)
-        freespins = player_state.get_freespins(user_id)
-        
-        return jsonify({
-            "result": result,
-            "payout": payout,
-            "freespins": freespins,
-            "balance": balance,
-            "combo_id": combo_id,
-            "combo_name": combo_name,
-            "jackpot_win": jackpot_win
-        })
-
-    # --- Always win режим ---
-    if CONFIG.get("always_win"):
-        win_combo = random.choice(COMBINATIONS)
-        if win_combo.get("line") == "center":
-            result = win_combo["pattern"]
-        elif win_combo.get("anywhere"):
-            result = [win_combo["pattern"][0]] * len(win_combo["pattern"])
-            while len(result) < 5:
-                result.append(random.choice([s['id'] for s in SYMBOLS if s['id'] != win_combo["pattern"][0]]))
-        else:
-            result = [random.choice([s['id'] for s in SYMBOLS]) for _ in range(5)]
-    # --- win_chance режим ---
-    elif CONFIG.get("win_chance", 0) > 0 and random.random() < CONFIG["win_chance"]:
-        win_combo = random.choice(COMBINATIONS)
-        if win_combo.get("line") == "center":
-            result = win_combo["pattern"]
-        elif win_combo.get("anywhere"):
-            result = [win_combo["pattern"][0]] * len(win_combo["pattern"])
-            while len(result) < 5:
-                result.append(random.choice([s['id'] for s in SYMBOLS if s['id'] != win_combo["pattern"][0]]))
-        else:
-            result = [random.choice([s['id'] for s in SYMBOLS]) for _ in range(5)]
-    else:
-        symbols_ids = [s['id'] for s in SYMBOLS]
-        result = [random.choice(symbols_ids) for _ in range(5)]
-
-    # Проверка выигрыша
-    for combo in COMBINATIONS:
-        if combo.get('line') == 'center' and result == combo['pattern']:
-            # Проверяем, является ли это комбинацией джекпота
-            if combo.get('jackpot'):
-                payout = current_jackpot
-                combo_id = combo.get('id')
-                combo_name = combo.get('name')
-                jackpot_win = True
-                # Сбрасываем джекпот на начальное значение
-                update_jackpot(CONFIG.get('initial_jackpot', 5000))
-            else:
-                base_payout = combo.get('payout', 0)
-                try:
-                    idx = bets.index(bet)
-                    multiplier = bet_multipliers[idx]
-                except ValueError:
-                    multiplier = 1
-                payout = base_payout * multiplier
-            
-            freespins_won = combo.get('freespins', 0)
-            combo_id = combo.get('id')
-            combo_name = combo.get('name')
-            
-        if combo.get('anywhere'):
-            count = sum(1 for r in result if r == combo['pattern'][0])
-            if count >= len(combo['pattern']):
-                base_payout = combo.get('payout', 0)
-                try:
-                    idx = bets.index(bet)
-                    multiplier = bet_multipliers[idx]
-                except ValueError:
-                    multiplier = 1
-                payout = base_payout * multiplier
-                freespins_won = combo.get('freespins', 0)
-                combo_id = combo.get('id')
-                combo_name = combo.get('name')
-
-    # Обновление баланса и фриспинов
-    player_state.add_win(user_id, payout, bet, return_bet=True)
-    if freespins_won > 0:
-        player_state.add_freespins(user_id, freespins_won)
-
-    # Увеличиваем джекпот на 1% от ставки
-    new_jackpot = current_jackpot + int(bet * 0.01)
-    update_jackpot(new_jackpot)
-
-    # Обновляем статистику
-    statistics_manager.update_statistics(
-        user_id, bet, payout,
-        is_jackpot=jackpot_win,
-        combo_name=combo_name,
-        pattern=result
-    )
-    
-    balance = player_state.get_balance(user_id)
-    freespins = player_state.get_freespins(user_id)
-
-    return jsonify({
-        "result": result,
-        "payout": payout,
-        "freespins": freespins,
-        "balance": balance,
-        "combo_id": combo_id,
-        "combo_name": combo_name,
-        "jackpot_win": jackpot_win
-    })
-
-@app.route('/api/symbols')
-def get_symbols():
-    return jsonify(SYMBOLS)
-
-@app.route('/api/combinations')
-def get_combinations():
-    return jsonify(COMBINATIONS)
-
-@app.route('/api/bet', methods=['GET'])
-@jwt_required()
-def get_bet():
-    user_id = get_jwt_identity()
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
-    return jsonify({"bet": user.get('bet', min(bets) if bets else 100000)})
-
-@app.route('/api/bet', methods=['POST'])
-@jwt_required()
-def set_bet():
-    user_id = get_jwt_identity()
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
-        
-    data = request.get_json()
-    bet = data.get('bet')
-    if not isinstance(bet, int) or bet <= 0:
-        return jsonify({"error": "Некорректная ставка"}), 400
-        
-    # Проверяем, что ставка входит в список разрешенных ставок
-    if bet not in bets:
-        return jsonify({"error": "Недопустимая ставка"}), 400
-        
-    # Обновляем ставку пользователя
-    update_user_bet(user_id, bet)
-    return jsonify({"bet": bet})
-
-@app.route('/api/restart', methods=['POST'])
-@jwt_required()
-def restart():
-    user_id = get_jwt_identity()
-    initial_balance = CONFIG.get('initial_balance', 1000)
-    
-    success, result = player_state.reset_state(user_id, initial_balance)
-    if success:
-        return jsonify(result)
-    return jsonify(result), 400
-
-@app.route('/api/activate_freespins', methods=['POST'])
-@jwt_required()
-def activate_freespins():
-    user_id = get_jwt_identity()
-    if player_state.add_freespins(user_id, 10):
-        balance = player_state.get_balance(user_id)
-        freespins = player_state.get_freespins(user_id)
-        return jsonify({
-            "balance": balance,
-            "freespins": freespins
-        })
-    return jsonify({"error": "Пользователь не найден"}), 404
-
-@app.route('/api/jackpot', methods=['GET'])
-def get_jackpot_value():
-    current_jackpot = get_jackpot()
-    return jsonify({"jackpot": current_jackpot})
-
-@app.route('/api/jackpot', methods=['POST'])
-def set_jackpot_value():
-    data = request.get_json()
-    value = data.get('jackpot')
-    if not isinstance(value, int) or value < 0:
-        return jsonify({"error": "Некорректное значение джекпота"}), 400
-    if update_jackpot(value):
-        return jsonify({"jackpot": value})
-    return jsonify({"error": "Ошибка при обновлении джекпота"}), 500
-
-@app.route('/api/config')
-def get_config():
-    return jsonify({
-        "background_color": CONFIG.get("background_color", "#232323"),
-        "background_image": CONFIG.get("background_image", "")
-    })
+# Создание приложения
+app = create_app()
 
 if __name__ == '__main__':
     app.run(debug=True) 
