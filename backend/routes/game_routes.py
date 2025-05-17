@@ -147,7 +147,7 @@ def spin():
     win_result = combination_manager.check_win(result, bet, bets_list, current_jackpot)
     
     # Обновляем состояние игрока
-    player_state.add_win(user_id, win_result.payout, bet, return_bet=True)
+    player_state.add_win(user_id, win_result.payout, bet, return_bet=win_result.payout > 0)
     if win_result.freespins_won > 0:
         player_state.add_freespins(user_id, win_result.freespins_won)
 
