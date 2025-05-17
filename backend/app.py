@@ -9,8 +9,10 @@ import secrets
 from database import (
     get_user_by_username, create_user, update_user_balance,
     update_statistics, get_user_statistics, get_user_by_id,
-    get_jackpot, update_jackpot, update_user_bet
+    get_jackpot, update_jackpot, update_user_bet, get_db
 )
+from balance_manager import BalanceManager
+from freespin_manager import FreespinManager
 
 app = Flask(__name__)
 CORS(app)
@@ -18,6 +20,11 @@ CORS(app)
 # Конфигурация JWT
 app.config['JWT_SECRET_KEY'] = secrets.token_hex(32)  # Генерируем безопасный ключ
 jwt = JWTManager(app)
+
+# Инициализация менеджеров
+db = get_db()
+balance_manager = BalanceManager(db)
+freespin_manager = FreespinManager(db)
 
 def hash_password(password):
     """Хеширует пароль с использованием SHA-256"""
@@ -100,14 +107,16 @@ def login():
 @jwt_required()
 def get_balance():
     user_id = get_jwt_identity()
-    print(f"Getting balance for user_id: {user_id}")
+    balance = balance_manager.get_balance(user_id)
+    freespins = freespin_manager.get_freespins(user_id)
+    
     user = get_user_by_id(user_id)
-    print(f"User data: {user}")
     if not user:
         return jsonify({"error": "Пользователь не найден"}), 404
+        
     return jsonify({
-        "balance": user['balance'],
-        "freespins": user['freespins']
+        "balance": balance,
+        "freespins": freespins
     })
 
 @app.route('/api/statistics')
@@ -138,26 +147,24 @@ def spin():
 
     # ИНИЦИАЛИЗАЦИЯ переменных
     payout = 0
-    freespins = 0
+    freespins_won = 0
     combo_id = None
     combo_name = None
     jackpot_win = False
     jackpot_before = current_jackpot
-    result = []  # Инициализируем result пустым списком
+    result = []  # Инициализируем result пустым списом
 
-    # Проверка баланса
-    if user['balance'] < bet and user['freespins'] == 0:
-        return jsonify({"error": "Недостаточно средств"}), 400
-
-    # Списание ставки
-    used_freespin = False
-    if user['freespins'] > 0:
-        user['freespins'] -= 1
-        used_freespin = True
-        print(f"Using freespin. Freespins left: {user['freespins']}")
+    # Проверяем наличие фриспинов
+    if freespin_manager.has_freespins(user_id):
+        # Используем фриспин
+        success, error = freespin_manager.use_freespin(user_id)
+        if not success:
+            return jsonify({"error": error}), 400
     else:
-        user['balance'] -= bet
-        print(f"Deducting bet {bet} from balance. New balance: {user['balance']}")
+        # Списание ставки через BalanceManager
+        success, error = balance_manager.deduct_bet(user_id, bet)
+        if not success:
+            return jsonify({"error": error}), 400
 
     # --- Джекпот шанс из конфига ---
     jackpot_chance = CONFIG.get('jackpot_chance', 0.01)
@@ -171,12 +178,8 @@ def spin():
         combo_name = jackpot_combo.get('name')
         jackpot_win = True
         
-        # Всегда добавляем выигрыш к балансу, независимо от использования фриспина
-        user['balance'] += payout
-        
-        # Возвращаем ставку только если не использовался фриспин
-        if not used_freespin:
-            user['balance'] += bet
+        # Обновляем баланс через BalanceManager
+        balance_manager.add_win(user_id, payout, bet, return_bet=True)
         
         # Обновляем статистику
         update_statistics(
@@ -186,14 +189,14 @@ def spin():
             pattern=result
         )
         
-        # Обновляем баланс пользователя
-        update_user_balance(user_id, user['balance'], user['freespins'])
+        balance = balance_manager.get_balance(user_id)
+        freespins = freespin_manager.get_freespins(user_id)
         
         return jsonify({
             "result": result,
             "payout": payout,
             "freespins": freespins,
-            "balance": user['balance'],
+            "balance": balance,
             "combo_id": combo_id,
             "combo_name": combo_name,
             "jackpot_win": jackpot_win
@@ -245,7 +248,7 @@ def spin():
                     multiplier = 1
                 payout = base_payout * multiplier
             
-            freespins = combo.get('freespins', 0)
+            freespins_won = combo.get('freespins', 0)
             combo_id = combo.get('id')
             combo_name = combo.get('name')
             
@@ -259,30 +262,18 @@ def spin():
                 except ValueError:
                     multiplier = 1
                 payout = base_payout * multiplier
-                freespins = combo.get('freespins', 0)
+                freespins_won = combo.get('freespins', 0)
                 combo_id = combo.get('id')
                 combo_name = combo.get('name')
 
     # Обновление баланса и фриспинов
-    print(f"Before balance update - Balance: {user['balance']}, Payout: {payout}, Used freespin: {used_freespin}")
-    
-    # Всегда добавляем выигрыш к балансу, независимо от того, использовался фриспин или нет
-    if payout > 0:
-        user['balance'] += payout
-        print(f"Adding payout {payout} to balance. New balance: {user['balance']}")
-    
-    # Возвращаем ставку только если не использовался фриспин
-    if not used_freespin and (payout > 0 or freespins > 0):
-        user['balance'] += bet
-        print(f"Returning bet {bet} to balance. New balance: {user['balance']}")
-    
-    user['freespins'] += freespins
-    print(f"Final balance update - Balance: {user['balance']}, Freespins: {user['freespins']}")
-    
+    balance_manager.add_win(user_id, payout, bet, return_bet=True)
+    if freespins_won > 0:
+        freespin_manager.add_freespins(user_id, freespins_won)
+
     # Увеличиваем джекпот на 1% от ставки
-    if not used_freespin:
-        new_jackpot = current_jackpot + int(bet * 0.01)
-        update_jackpot(new_jackpot)
+    new_jackpot = current_jackpot + int(bet * 0.01)
+    update_jackpot(new_jackpot)
 
     # Обновляем статистику
     update_statistics(
@@ -292,14 +283,14 @@ def spin():
         pattern=result
     )
     
-    # Обновляем баланс пользователя
-    update_user_balance(user_id, user['balance'], user['freespins'])
+    balance = balance_manager.get_balance(user_id)
+    freespins = freespin_manager.get_freespins(user_id)
 
     return jsonify({
         "result": result,
         "payout": payout,
         "freespins": freespins,
-        "balance": user['balance'],
+        "balance": balance,
         "combo_id": combo_id,
         "combo_name": combo_name,
         "jackpot_win": jackpot_win
@@ -354,17 +345,14 @@ def restart():
 @jwt_required()
 def activate_freespins():
     user_id = get_jwt_identity()
-    user = get_user_by_id(user_id)
-    if not user:
-        return jsonify({"error": "Пользователь не найден"}), 404
-    
-    user['freespins'] += 10
-    update_user_balance(user_id, user['balance'], user['freespins'])
-    
-    return jsonify({
-        "balance": user['balance'],
-        "freespins": user['freespins']
-    })
+    if freespin_manager.add_freespins(user_id, 10):
+        balance = balance_manager.get_balance(user_id)
+        freespins = freespin_manager.get_freespins(user_id)
+        return jsonify({
+            "balance": balance,
+            "freespins": freespins
+        })
+    return jsonify({"error": "Пользователь не найден"}), 404
 
 @app.route('/api/jackpot', methods=['GET'])
 def get_jackpot_value():
