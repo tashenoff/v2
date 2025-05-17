@@ -3,45 +3,19 @@
     "id": "jackpot_seven_center",
     "name": "5 x Семёрка по центру (Джекпот)",
     "pattern": ["seven", "seven", "seven", "seven", "seven"],
-    "line": "center",
+    "line_id": 1,
     "payout": 0,
     "jackpot": true
   },
-  {
-    "id": "five_cherry_center",
-    "name": "5 x Вишня по центру",
-    "pattern": ["cherry", "cherry", "cherry", "cherry", "cherry"],
-    "line": "center",
-    "payout": 1000
-  },
-  {
-    "id": "four_lemon_center",
-    "name": "4 x Лимон слева по центру",
-    "pattern": ["lemon", "lemon", "lemon", "lemon", "*"],
-    "line": "center",
-    "payout": 200
-  },
-  {
-    "id": "three_seven_center",
-    "name": "3 x Семёрка слева по центру",
-    "pattern": ["seven", "seven", "seven", "*", "*"],
-    "line": "center",
-    "payout": 100
-  },
-  {
-    "id": "wild_any",
-    "name": "5 x Любой символ с Wild",
-    "pattern": ["*", "*", "wild", "*", "*"],
-    "line": "center",
-    "payout": 500
-  },
-  {
-    "id": "scatter_bonus",
-    "name": "3+ Scatter в любом месте",
-    "pattern": ["scatter", "scatter", "scatter"],
-    "anywhere": true,
-    "payout": 0,
-    "freespins": 10
-  }
+
  
+ 
+ 
+  {
+    "id": "five_cherry_bottom",
+    "name": "5 x Вишня по нижней линии",
+    "pattern": ["cherry", "cherry", "cherry", "cherry", "cherry"],
+    "line_id": 3,
+    "payout": 1500
+  }
 ] 

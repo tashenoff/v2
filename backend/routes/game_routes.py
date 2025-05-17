@@ -31,6 +31,10 @@ def get_combination_manager():
     from flask import current_app
     return current_app.combination_manager
 
+def get_lines_config():
+    from app import LINES_CONFIG
+    return LINES_CONFIG
+
 @game_routes.route('/balance')
 @jwt_required()
 def get_balance():
@@ -67,6 +71,7 @@ def spin():
     statistics_manager = get_statistics_manager()
     config = get_config()
     combination_manager = get_combination_manager()
+    lines_config = get_lines_config()
 
     # Проверяем наличие фриспинов
     if player_state.has_freespins(user_id):
@@ -81,15 +86,49 @@ def spin():
     # Генерация результата
     symbols = get_symbols()
     if config.get("always_win"):
+        # Выбираем случайную комбинацию
         win_combo = random.choice(get_combinations())
-        if win_combo.get("line") == "center":
-            result = win_combo["pattern"]
-        elif win_combo.get("anywhere"):
-            result = [win_combo["pattern"][0]] * len(win_combo["pattern"])
-            while len(result) < 5:
-                result.append(random.choice([s['id'] for s in symbols if s['id'] != win_combo["pattern"][0]]))
+        result = ['*'] * 5  # Инициализируем пустой результат
+        
+        if win_combo.get('anywhere'):
+            # Для anywhere комбинаций (например, scatter)
+            pattern = win_combo['pattern']
+            # Размещаем требуемые символы в случайных позициях
+            positions = random.sample(range(5), len(pattern))
+            for pos, symbol in zip(positions, pattern):
+                result[pos] = symbol
+            # Заполняем оставшиеся позиции случайными символами
+            for i in range(5):
+                if result[i] == '*':
+                    result[i] = random.choice([s['id'] for s in symbols])
         else:
-            result = [random.choice([s['id'] for s in symbols]) for _ in range(5)]
+            # Для линейных комбинаций
+            line_id = win_combo.get('line_id')
+            if line_id:
+                # Находим конфигурацию линии
+                line_config = next((line for line in lines_config['lines'] if line['id'] == line_id), None)
+                if line_config:
+                    # Создаем матрицу 3x5 для результата
+                    matrix = [['*'] * 5 for _ in range(3)]
+                    # Заполняем символы на выигрышной линии
+                    pattern = win_combo['pattern']
+                    for i, (x, y) in enumerate(line_config['positions']):
+                        if i < len(pattern):
+                            matrix[y][x] = pattern[i]
+                        else:
+                            matrix[y][x] = random.choice([s['id'] for s in symbols])
+                    
+                    # Заполняем оставшиеся позиции случайными символами
+                    for y in range(3):
+                        for x in range(5):
+                            if matrix[y][x] == '*':
+                                matrix[y][x] = random.choice([s['id'] for s in symbols])
+                    
+                    # Преобразуем всю матрицу в одномерный список
+                    result = []
+                    for x in range(5):  # Сначала по столбцам
+                        for y in range(3):  # Затем по строкам
+                            result.append(matrix[y][x])
     elif config.get("win_chance", 0) > 0 and random.random() < config["win_chance"]:
         win_combo = random.choice(get_combinations())
         if win_combo.get("line") == "center":
@@ -137,7 +176,16 @@ def spin():
         "balance": balance,
         "combo_id": win_result.combo_id,
         "combo_name": win_result.combo_name,
-        "jackpot_win": win_result.is_jackpot
+        "jackpot_win": win_result.is_jackpot,
+        "winning_lines": [
+            {
+                "id": line.line_id,
+                "name": line.line_name,
+                "multiplier": line.multiplier,
+                "symbols": line.symbols
+            }
+            for line in win_result.winning_lines
+        ]
     })
 
 @game_routes.route('/bet', methods=['GET'])

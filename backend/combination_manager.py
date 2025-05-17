@@ -1,6 +1,6 @@
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
-from line_checker import LineChecker
+from line_checker import LineChecker, LineResult
 
 @dataclass
 class WinResult:
@@ -10,12 +10,15 @@ class WinResult:
     freespins_won: int
     is_jackpot: bool
     pattern: List[str]
+    winning_lines: List[LineResult]
 
 class CombinationManager:
     def __init__(self, combinations: List[Dict], config: Dict):
         self.combinations = combinations
         self.config = config
-        self.line_checker = LineChecker()
+        # Создаем конфигурацию для LineChecker
+        from app import LINES_CONFIG
+        self.line_checker = LineChecker(LINES_CONFIG)
         
     def calculate_multiplier(self, bet: int, bets_list: List[int]) -> float:
         """Вычисляет множитель выплаты на основе ставки"""
@@ -25,66 +28,108 @@ class CombinationManager:
         except (ValueError, IndexError):
             return 1
             
-    def check_center_line(self, result: List[str], combo: Dict, bet: int, 
+    def check_combination(self, result: List[str], combo: Dict, bet: int, 
                          bets_list: List[int], current_jackpot: int) -> Optional[WinResult]:
-        """Проверяет выигрышную комбинацию по центральной линии"""
-        if combo.get('line') == 'center' and self.line_checker.check_line(result, combo['pattern'], 'center'):
-            if combo.get('jackpot'):
-                return WinResult(
-                    payout=current_jackpot,
-                    combo_id=combo.get('id'),
-                    combo_name=combo.get('name'),
-                    freespins_won=combo.get('freespins', 0),
-                    is_jackpot=True,
-                    pattern=result
-                )
-            else:
-                base_payout = combo.get('payout', 0)
-                multiplier = self.calculate_multiplier(bet, bets_list)
-                return WinResult(
-                    payout=int(base_payout * multiplier),
-                    combo_id=combo.get('id'),
-                    combo_name=combo.get('name'),
-                    freespins_won=combo.get('freespins', 0),
-                    is_jackpot=False,
-                    pattern=result
-                )
-        return None
-
-    def check_anywhere(self, result: List[str], combo: Dict, bet: int, 
-                      bets_list: List[int]) -> Optional[WinResult]:
-        """Проверяет выигрышную комбинацию в любом месте"""
-        if combo.get('anywhere') and self.line_checker.check_line(result, combo['pattern'], 'anywhere'):
-            base_payout = combo.get('payout', 0)
-            multiplier = self.calculate_multiplier(bet, bets_list)
+        """Проверяет выигрышную комбинацию"""
+        # Определяем тип проверки
+        if combo.get('anywhere'):
+            line_results = self.line_checker.check_anywhere(result, combo['pattern'])
+            print(f"Проверяем комбинацию '{combo.get('name')}' в любом месте")
+        else:
+            # Проверяем конкретную линию по её ID
+            line_id = combo.get('line_id')
+            line_name = next((line['name'] for line in self.config.get('lines', []) if line['id'] == line_id), 'Неизвестная линия')
+            print(f"Проверяем комбинацию '{combo.get('name')}' на линии {line_name} (ID: {line_id})")
+            line_results = self.line_checker.check_line(result, combo['pattern'], line_id)
+        
+        # Находим выигрышные линии
+        winning_lines = [lr for lr in line_results if lr.is_win]
+        
+        if not winning_lines:
+            return None
+            
+        # Рассчитываем выплату с учетом множителей линий
+        total_multiplier = sum(lr.multiplier for lr in winning_lines)
+        bet_multiplier = self.calculate_multiplier(bet, bets_list)
+        
+        # Получаем имя комбинации
+        combo_name = combo.get('name', 'Unknown Combination')
+        combo_id = combo.get('id', 'unknown_id')
+        
+        # Формируем информацию о выигрышных линиях
+        winning_lines_info = []
+        for lr in winning_lines:
+            line_info = next((line for line in self.config.get('lines', []) if line['id'] == lr.line_id), None)
+            if line_info:
+                winning_lines_info.append(f"{line_info['name']} (x{lr.multiplier})")
+        
+        winning_lines_str = ', '.join(winning_lines_info) if winning_lines_info else 'Anywhere'
+        print(f"Найдена выигрышная комбинация: {combo_name} (ID: {combo_id}) на линиях: {winning_lines_str}")
+        
+        if combo.get('jackpot'):
             return WinResult(
-                payout=int(base_payout * multiplier),
-                combo_id=combo.get('id'),
-                combo_name=combo.get('name'),
+                payout=current_jackpot,
+                combo_id=combo_id,
+                combo_name=combo_name,
+                freespins_won=combo.get('freespins', 0),
+                is_jackpot=True,
+                pattern=result,
+                winning_lines=winning_lines
+            )
+        else:
+            base_payout = combo.get('payout', 0)
+            final_payout = int(base_payout * bet_multiplier * total_multiplier)
+            return WinResult(
+                payout=final_payout,
+                combo_id=combo_id,
+                combo_name=combo_name,
                 freespins_won=combo.get('freespins', 0),
                 is_jackpot=False,
-                pattern=result
+                pattern=result,
+                winning_lines=winning_lines
             )
-        return None
 
     def check_win(self, result: List[str], bet: int, bets_list: List[int], 
                   current_jackpot: int) -> WinResult:
         """Проверяет результат на выигрышные комбинации"""
-        best_win = WinResult(0, None, None, 0, False, result)
+        # Инициализируем начальный результат с пустым именем комбинации
+        best_win = WinResult(
+            payout=0,
+            combo_id="no_win",
+            combo_name="No Win",
+            freespins_won=0,
+            is_jackpot=False,
+            pattern=result,
+            winning_lines=[]
+        )
+        
+        print(f"Проверяем комбинации для результата: {result}")
         
         for combo in self.combinations:
-            # Проверяем центральную линию
-            center_win = self.check_center_line(
-                result, combo, bet, bets_list, current_jackpot
-            )
-            if center_win and center_win.payout > best_win.payout:
-                best_win = center_win
+            win = self.check_combination(result, combo, bet, bets_list, current_jackpot)
+            if win and win.payout > best_win.payout:
+                best_win = win
+                # Формируем информацию о выигрышных линиях для лучшего выигрыша
+                winning_lines_info = []
+                for lr in best_win.winning_lines:
+                    line_info = next((line for line in self.config.get('lines', []) if line['id'] == lr.line_id), None)
+                    if line_info:
+                        winning_lines_info.append(f"{line_info['name']} (x{lr.multiplier})")
+                winning_lines_str = ', '.join(winning_lines_info) if winning_lines_info else 'Anywhere'
+                print(f"Новый лучший выигрыш: {win.combo_name} с выплатой {win.payout} на линиях: {winning_lines_str}")
                 if best_win.is_jackpot:
                     return best_win
-            
-            # Проверяем комбинации в любом месте
-            anywhere_win = self.check_anywhere(result, combo, bet, bets_list)
-            if anywhere_win and anywhere_win.payout > best_win.payout:
-                best_win = anywhere_win
                 
+        # Формируем финальную информацию о выигрышных линиях
+        if best_win.winning_lines:
+            winning_lines_info = []
+            for lr in best_win.winning_lines:
+                line_info = next((line for line in self.config.get('lines', []) if line['id'] == lr.line_id), None)
+                if line_info:
+                    winning_lines_info.append(f"{line_info['name']} (x{lr.multiplier})")
+            winning_lines_str = ', '.join(winning_lines_info) if winning_lines_info else 'Anywhere'
+            print(f"Финальный результат: {best_win.combo_name} с выплатой {best_win.payout} на линиях: {winning_lines_str}")
+        else:
+            print(f"Финальный результат: Нет выигрыша")
+            
         return best_win 
