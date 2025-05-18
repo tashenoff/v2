@@ -177,6 +177,7 @@ def spin():
         "combo_id": win_result.combo_id,
         "combo_name": win_result.combo_name,
         "jackpot_win": win_result.is_jackpot,
+        "win_level": win_result.win_level.value,
         "winning_lines": [
             {
                 "id": line.line_id,

@@ -1,6 +1,22 @@
 from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass
 from line_checker import LineChecker, LineResult
+from enum import Enum
+
+class WinLevel(Enum):
+    NORMAL = "normal"
+    MEDIUM = "medium"
+    BIG = "big"
+    MEGA = "mega"
+    SUPER = "super"
+
+WIN_LEVEL_MULTIPLIERS = {
+    WinLevel.NORMAL: 1,
+    WinLevel.MEDIUM: 2,
+    WinLevel.BIG: 3,
+    WinLevel.MEGA: 5,
+    WinLevel.SUPER: 10
+}
 
 @dataclass
 class WinResult:
@@ -11,6 +27,7 @@ class WinResult:
     is_jackpot: bool
     pattern: List[str]
     winning_lines: List[LineResult]
+    win_level: WinLevel = WinLevel.NORMAL  # Добавляем уровень выигрыша со значением по умолчанию
 
 class CombinationManager:
     def __init__(self, combinations: List[Dict], config: Dict):
@@ -74,11 +91,27 @@ class CombinationManager:
                 freespins_won=combo.get('freespins', 0),
                 is_jackpot=True,
                 pattern=result,
-                winning_lines=winning_lines
+                winning_lines=winning_lines,
+                win_level=WinLevel.SUPER  # Джекпот всегда SUPER уровень
             )
         else:
             base_payout = combo.get('payout', 0)
             final_payout = int(base_payout * bet_multiplier * total_multiplier)
+            
+            # Определяем уровень выигрыша на основе базовой выплаты
+            win_level = WinLevel.NORMAL
+            if base_payout >= 5000:
+                win_level = WinLevel.SUPER
+            elif base_payout >= 2000:
+                win_level = WinLevel.MEGA
+            elif base_payout >= 1000:
+                win_level = WinLevel.BIG
+            elif base_payout >= 500:
+                win_level = WinLevel.MEDIUM
+                
+            # Применяем множитель уровня выигрыша
+            final_payout = int(final_payout * WIN_LEVEL_MULTIPLIERS[win_level])
+            
             return WinResult(
                 payout=final_payout,
                 combo_id=combo_id,
@@ -86,7 +119,8 @@ class CombinationManager:
                 freespins_won=combo.get('freespins', 0),
                 is_jackpot=False,
                 pattern=result,
-                winning_lines=winning_lines
+                winning_lines=winning_lines,
+                win_level=win_level
             )
 
     def check_win(self, result: List[str], bet: int, bets_list: List[int], 

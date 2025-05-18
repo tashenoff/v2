@@ -28,6 +28,7 @@ const GameBoard = ({
   const [showWinModal, setShowWinModal] = useState(false);
   const [comboName, setComboName] = useState(null);
   const [payout, setPayout] = useState(0);
+  const [winLevel, setWinLevel] = useState('normal');
   
   useEffect(() => {
     console.log('GameBoard - symbols updated:', symbols?.length);
@@ -50,6 +51,9 @@ const GameBoard = ({
       }
       if (spinResults.comboName) {
         setComboName(spinResults.comboName);
+      }
+      if (spinResults.winLevel) {
+        setWinLevel(spinResults.winLevel);
       }
       if (spinResults.payout > 0 || spinResults.jackpot_win) {
         setShowWinModal(true);
@@ -97,6 +101,7 @@ const GameBoard = ({
         <WinInfo 
           comboName={comboName}
           payout={payout}
+          winLevel={winLevel}
         />
       </Modal>
       

@@ -52,7 +52,8 @@ const SpinLogic = ({
         matchedPositions: data.matched_positions,
         jackpot_win: data.jackpot_win,
         currentFreespins: freespins,
-        newFreespins: data.freespins
+        newFreespins: data.freespins,
+        winLevel: data.win_level || 'normal'
       };
       
       setSpinData(spinResult);

@@ -11,10 +11,19 @@
   text-shadow: 0 0 10px rgba(30, 144, 255, 0.3);
 }
 
+.win-level {
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  animation: fadeIn 0.5s ease-in;
+}
+
 .payout-amount {
   font-size: 36px;
   font-weight: bold;
-  color: #ffd700;
   text-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
   animation: pulse 1s infinite;
 }
@@ -29,4 +38,25 @@
   100% {
     transform: scale(1);
   }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.win-value .animated-number {
+  animation: glowing 1.5s infinite;
+}
+
+@keyframes glowing {
+  0% { text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
+  50% { text-shadow: 0 0 20px rgba(255, 215, 0, 0.8); }
+  100% { text-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
 } 
